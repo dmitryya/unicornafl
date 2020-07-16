@@ -28,7 +28,7 @@
 /* Version string: */
 
 // c = release, d = volatile github dev, e = experimental branch
-#define VERSION "++2.66c"
+#define VERSION "++2.66d"
 
 /******************************************************
  *                                                    *
@@ -379,6 +379,10 @@
 /* AFL RedQueen */
 
 #define CMPLOG_SHM_ENV_VAR "__AFL_CMPLOG_SHM_ID"
+
+/* CPU Affinity lockfile env var */
+
+#define CPU_AFFINITY_ENV_VAR "__AFL_LOCKFILE"
 
 /* Uncomment this to use inferior block-coverage-based instrumentation. Note
    that you need to recompile the target binary for this to have any effect: */
