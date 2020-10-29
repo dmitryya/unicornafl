@@ -69,6 +69,7 @@ static inline void cpu_physical_memory_set_dirty_flag(struct uc_struct *uc, ram_
 static inline void cpu_physical_memory_set_dirty_range(struct uc_struct *uc, ram_addr_t start,
                                                        ram_addr_t length)
 {
+
 }
 
 #if !defined(_WIN32)
@@ -83,6 +84,7 @@ static inline void cpu_physical_memory_clear_dirty_range(struct uc_struct *uc, r
                                                          ram_addr_t length,
                                                          unsigned client)
 {
+
 }
 
 void cpu_physical_memory_reset_dirty(struct uc_struct *uc,

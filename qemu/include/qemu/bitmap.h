@@ -26,6 +26,7 @@
  * Note that nbits should be always a compile time evaluable constant.
  * Otherwise many inlines will generate horrible code.
  *
+ * qemu_bitmap_set(dst, pos, nbits)			Set specified bit area
  * qemu_bitmap_clear(dst, pos, nbits)		Clear specified bit area
  */
 
@@ -44,6 +45,7 @@
 #define DECLARE_BITMAP(name,bits)                  \
         unsigned long name[BITS_TO_LONGS(bits)]
 
+void qemu_bitmap_set(unsigned long *map, long i, long len);
 void qemu_bitmap_clear(unsigned long *map, long start, long nr);
 
 static inline unsigned long *bitmap_zero_extend(unsigned long *old,

@@ -127,7 +127,7 @@ enum uc_hook_idx {
 // if statement to check hook bounds
 #define HOOK_BOUND_CHECK(hh, addr)                  \
     ((((addr) >= (hh)->begin && (addr) <= (hh)->end) \
-         || (hh)->begin > (hh)->end))
+        || (hh)->begin > (hh)->end) && !((hh)->to_delete))
 
 #define HOOK_EXISTS(uc, idx) ((uc)->hook[idx##_IDX].head != NULL)
 #define HOOK_EXISTS_BOUNDED(uc, idx, addr) _hook_exists_bounded((uc)->hook[idx##_IDX].head, addr)
@@ -246,13 +246,15 @@ struct uc_struct {
     char *afl_testcase_ptr; // map, shared with afl, to get testcases delivered from for each run
     uint32_t *afl_testcase_size_p; // size of the current testcase, if using shared map fuzzing with afl.
 #endif
+    struct list saved_contexts; // The contexts saved by this uc_struct.
 };
 
 // Metadata stub for the variable-size cpu context used with uc_context_*()
 // We also save cpu->jmp_env, so emulation can be reentrant
 struct uc_context {
    size_t context_size;	// size of the real internal context structure
-   unsigned int jmp_env_size; // size of cpu->jmp_env
+   size_t jmp_env_size; // size of cpu->jmp_env
+   struct uc_struct* uc; // the uc_struct which creates this context
    char data[0]; // context + cpu->jmp_env
 };
 

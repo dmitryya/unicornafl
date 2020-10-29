@@ -883,6 +883,10 @@ if (MSVC)
         qemu/util/oslib-win32.c
         qemu/util/qemu-thread-win32.c
     )
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        enable_language(ASM_MASM)
+        set(UNICORN_SRCS ${UNICORN_SRCS} qemu/util/setjmp-wrapper-win32.asm)
+    endif()
 else()
     set(UNICORN_SRCS
         ${UNICORN_SRCS_COMMON}
