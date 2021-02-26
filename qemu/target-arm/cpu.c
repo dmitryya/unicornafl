@@ -101,6 +101,8 @@ static void arm_cpu_reset(CPUState *s)
     if (arm_feature(env, ARM_FEATURE_AARCH64)) {
         /* 64 bit CPUs always start in 64 bit mode */
         env->aarch64 = 1;
+        env->cp15.scr_el3 |= SCR_RW;
+
 #if defined(CONFIG_USER_ONLY)
         env->pstate = PSTATE_MODE_EL0t;
         /* Userspace expects access to DC ZVA, CTL_EL0 and the cache ops */
@@ -112,6 +114,7 @@ static void arm_cpu_reset(CPUState *s)
         if (arm_feature(env, ARM_FEATURE_EL3)) {
             env->pstate = PSTATE_MODE_EL3h;
         } else if (arm_feature(env, ARM_FEATURE_EL2)) {
+            env->cp15.hcr_el2 |= HCR_RW;
             env->pstate = PSTATE_MODE_EL2h;
         } else {
             env->pstate = PSTATE_MODE_EL1h;
