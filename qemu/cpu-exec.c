@@ -463,7 +463,7 @@ not_found:
     }
 
 #if defined(UNICORN_AFL)
-    afl_request_tsl(env->uc, pc, cs_base, flags);
+    afl_request_tsl(env, pc, cs_base, flags);
 #endif
 
 found:
