@@ -940,6 +940,32 @@ static CPAccessResult gt_vtimer_access(CPUARMState *env, const ARMCPRegInfo *ri)
     return gt_timer_access(env, GTIMER_VIRT);
 }
 
+static CPAccessResult gt_stimer_access(CPUARMState *env,
+                                       const ARMCPRegInfo *ri)
+{
+    /* The AArch64 register view of the secure physical timer is
+     * always accessible from EL3, and configurably accessible from
+     * Secure EL1.
+     */
+    switch (arm_current_el(env)) {
+    case 1:
+        if (!arm_is_secure(env)) {
+            return CP_ACCESS_TRAP;
+        }
+        if (!(env->cp15.scr_el3 & SCR_ST)) {
+            return CP_ACCESS_TRAP_EL3;
+        }
+        return CP_ACCESS_OK;
+    case 0:
+    case 2:
+        return CP_ACCESS_TRAP;
+    case 3:
+        return CP_ACCESS_OK;
+    default:
+        g_assert_not_reached();
+    }
+}
+
 static uint64_t gt_get_countervalue(CPUARMState *env)
 {
     return qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) / GTIMER_SCALE;
@@ -1041,6 +1067,52 @@ static void gt_ctl_write(CPUARMState *env, const ARMCPRegInfo *ri,
     }
 }
 
+static void gt_sec_timer_reset(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    //ARMCPU *cpu = env_archcpu(env);
+    //timer_del(cpu->gt_timer[GTIMER_SEC]);
+}
+
+static void gt_sec_cval_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                              uint64_t value)
+{
+    env->cp15.c14_timer[GTIMER_SEC].cval = value;
+    //gt_recalc_timer(arm_env_get_cpu(env), timeridx);
+}
+
+static uint64_t gt_sec_tval_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    return (uint32_t)(env->cp15.c14_timer[GTIMER_SEC].cval -
+                      gt_get_countervalue(env));
+}
+
+static void gt_sec_tval_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                              uint64_t value)
+{
+    env->cp15.c14_timer[GTIMER_SEC].cval = gt_get_countervalue(env) +
+        + sextract64(value, 0, 32);
+    gt_recalc_timer(arm_env_get_cpu(env), GTIMER_SEC);
+}
+
+static void gt_sec_ctl_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                              uint64_t value)
+{
+    ARMCPU *cpu = arm_env_get_cpu(env);
+    uint32_t oldval = env->cp15.c14_timer[GTIMER_SEC].ctl;
+
+    env->cp15.c14_timer[GTIMER_SEC].ctl = deposit64(oldval, 0, 2, value);
+    if ((oldval ^ value) & 1) {
+        /* Enable toggled */
+        gt_recalc_timer(cpu, GTIMER_SEC);
+    } else if ((oldval ^ value) & 2) {
+        /* IMASK toggled: don't need to recalculate,
+         * just set the interrupt line based on ISTATUS
+         */
+        //qemu_set_irq(cpu->gt_timer_outputs[timeridx],
+        //             (oldval & 4) && !(value & 2));
+    }
+}
+
 void arm_gt_ptimer_cb(void *opaque)
 {
     ARMCPU *cpu = opaque;
@@ -1121,6 +1193,32 @@ static const ARMCPRegInfo generic_timer_cp_reginfo[] = {
     { "CNTV_CVAL_EL0", 0,14,3, 3,3,2, ARM_CP_STATE_AA64,
       ARM_CP_IO, PL1_RW | PL0_R, NULL, 0, offsetof(CPUARMState, cp15.c14_timer[GTIMER_VIRT].cval),
       gt_vtimer_access, NULL, gt_cval_write, NULL, raw_write, },
+    /* Secure timer -- this is actually restricted to only EL3
+     * and configurably Secure-EL1 via the accessfn.
+     */
+    { .name = "CNTPS_TVAL_EL1", .state = ARM_CP_STATE_AA64,
+      .opc0 = 3, .opc1 = 7, .crn = 14, .crm = 2, .opc2 = 0,
+      .type = ARM_CP_NO_MIGRATE | ARM_CP_IO, .access = PL1_RW,
+      .accessfn = gt_stimer_access,
+      .readfn = gt_sec_tval_read,
+      .writefn = gt_sec_tval_write,
+      .resetfn = gt_sec_timer_reset,
+    },
+    { .name = "CNTPS_CTL_EL1", .state = ARM_CP_STATE_AA64,
+      .opc0 = 3, .opc1 = 7, .crn = 14, .crm = 2, .opc2 = 1,
+      .type = ARM_CP_IO, .access = PL1_RW,
+      .accessfn = gt_stimer_access,
+      .fieldoffset = offsetof(CPUARMState, cp15.c14_timer[GTIMER_SEC].ctl),
+      .resetvalue = 0,
+      .writefn = gt_sec_ctl_write, .raw_writefn = raw_write,
+    },
+    { .name = "CNTPS_CVAL_EL1", .state = ARM_CP_STATE_AA64,
+      .opc0 = 3, .opc1 = 7, .crn = 14, .crm = 2, .opc2 = 2,
+      .type = ARM_CP_IO, .access = PL1_RW,
+      .accessfn = gt_stimer_access,
+      .fieldoffset = offsetof(CPUARMState, cp15.c14_timer[GTIMER_SEC].cval),
+      .writefn = gt_sec_cval_write, .raw_writefn = raw_write,
+    },
     REGINFO_SENTINEL
 };
 
