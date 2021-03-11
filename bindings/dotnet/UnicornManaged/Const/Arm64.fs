@@ -309,7 +309,9 @@ module Arm64 =
     let UC_ARM64_REG_VBAR_EL1 = 287
     let UC_ARM64_REG_VBAR_EL2 = 288
     let UC_ARM64_REG_VBAR_EL3 = 289
-    let UC_ARM64_REG_ENDING = 290
+
+    let UC_ARM64_REG_SCR_EL3 = 290
+    let UC_ARM64_REG_ENDING = 291
 
     // alias registers
     let UC_ARM64_REG_IP0 = 215

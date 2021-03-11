@@ -128,6 +128,9 @@ int arm64_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int co
                 case UC_ARM64_REG_MAIR_EL1:
                     *(uint64_t *)value = ARM_CPU(uc, mycpu)->env.cp15.mair_el1;
                     break;
+                case UC_ARM64_REG_SCR_EL3:
+                    *(uint64_t *)value = ARM_CPU(uc, mycpu)->env.cp15.scr_el3;
+                    break;
             }
         }
     }
@@ -220,6 +223,9 @@ int arm64_reg_write(struct uc_struct *uc, unsigned int *regs, void* const* vals,
                     break;
                 case UC_ARM64_REG_MAIR_EL1:
                     ARM_CPU(uc, mycpu)->env.cp15.mair_el1 = *(uint64_t *)value;
+                    break;
+                case UC_ARM64_REG_SCR_EL3:
+                    ARM_CPU(uc, mycpu)->env.cp15.scr_el3 = *(uint64_t *)value;
                     break;
             }
         }

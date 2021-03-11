@@ -327,6 +327,8 @@ typedef enum uc_arm64_reg {
     UC_ARM64_REG_VBAR_EL2,
     UC_ARM64_REG_VBAR_EL3,
 
+    UC_ARM64_REG_SCR_EL3,
+
     UC_ARM64_REG_ENDING,		// <-- mark the end of the list of registers
 
     //> alias registers
