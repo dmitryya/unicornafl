@@ -168,6 +168,10 @@ int cpu_exec(struct uc_struct *uc, CPUArchState *env)
 #if defined(TARGET_MIPS) || defined(TARGET_MIPS64)
                     env->active_tc.PC = uc->next_pc;
 #endif
+#if defined(TARGET_AARCH64)
+                    /* pre-set interrupt related registers, but do not change CPU state */
+                    cc->do_interrupt(cpu);
+#endif
                     if (uc->stop_interrupt && uc->stop_interrupt(cpu->exception_index)) {
                         // Unicorn: call registered invalid instruction callbacks
                         HOOK_FOREACH_VAR_DECLARE;
