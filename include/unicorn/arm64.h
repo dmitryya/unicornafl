@@ -333,6 +333,8 @@ typedef enum uc_arm64_reg {
     UC_ARM64_REG_SPSR_EL2,
     UC_ARM64_REG_SPSR_EL3,
 
+    UC_ARM64_REG_SCTLR,
+
     UC_ARM64_REG_ENDING,		// <-- mark the end of the list of registers
 
     //> alias registers

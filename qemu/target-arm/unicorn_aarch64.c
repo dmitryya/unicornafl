@@ -140,6 +140,9 @@ int arm64_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int co
                 case UC_ARM64_REG_SPSR_EL3:
                     *(uint64_t *)value = ARM_CPU(uc, mycpu)->env.banked_spsr[7];
                     break;
+                case UC_ARM64_REG_SCTLR:
+                    *(uint64_t *)value = ARM_CPU(uc, mycpu)->env.cp15.c1_sys;
+                    break;
             }
         }
     }
@@ -244,6 +247,9 @@ int arm64_reg_write(struct uc_struct *uc, unsigned int *regs, void* const* vals,
                     break;
                 case UC_ARM64_REG_SPSR_EL3:
                     ARM_CPU(uc, mycpu)->env.banked_spsr[7] = *(uint64_t *)value;
+                    break;
+                case UC_ARM64_REG_SCTLR:
+                    ARM_CPU(uc, mycpu)->env.cp15.c1_sys = *(uint64_t *)value;
                     break;
             }
         }
