@@ -877,7 +877,7 @@ set(UNICORN_SRCS_COMMON
     afl.c
 )
 
-if (MSVC)
+if (WIN32)
     set(UNICORN_SRCS
         ${UNICORN_SRCS_COMMON}
         qemu/util/oslib-win32.c
@@ -945,7 +945,7 @@ target_compile_options(unicorn PRIVATE
     ${UNICORN_COMPILE_OPTIONS}
 )
 
-if(MSVC)
+if(WIN32)
     if (UNICORN_BUILD_SHARED)
         target_compile_options(unicorn PRIVATE
             -DUNICORN_SHARED
@@ -966,7 +966,7 @@ else()
     )
 endif()
 
-if(MSVC)
+if(WIN32)
     set(SAMPLES_LIB
         unicorn
     )
