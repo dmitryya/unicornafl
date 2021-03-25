@@ -66,6 +66,8 @@ int arm_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int coun
             *(int32_t *)value = ARM_CPU(uc, mycpu)->env.regs[regid - UC_ARM_REG_R0];
         else if (regid >= UC_ARM_REG_D0 && regid <= UC_ARM_REG_D31)
             *(float64 *)value = ARM_CPU(uc, mycpu)->env.vfp.regs[regid - UC_ARM_REG_D0];
+        else if (regid >= UC_ARM_REG_VBAR_EL0 && regid <= UC_ARM_REG_VBAR_EL3)
+            *(uint64_t*)value = ARM_CPU(uc, mycpu)->env.cp15.vbar_el[regid - UC_ARM_REG_VBAR_EL0];
         else {
             switch(regid) {
                 case UC_ARM_REG_XPSR:
@@ -135,6 +137,8 @@ int arm_reg_write(struct uc_struct *uc, unsigned int *regs, void* const* vals, i
             ARM_CPU(uc, mycpu)->env.regs[regid - UC_ARM_REG_R0] = *(uint32_t *)value;
         else if (regid >= UC_ARM_REG_D0 && regid <= UC_ARM_REG_D31)
             ARM_CPU(uc, mycpu)->env.vfp.regs[regid - UC_ARM_REG_D0] = *(float64 *)value;
+        else if (regid >= UC_ARM_REG_VBAR_EL0 && regid <= UC_ARM_REG_VBAR_EL3)
+            ARM_CPU(uc, mycpu)->env.cp15.vbar_el[regid - UC_ARM_REG_VBAR_EL0] = *(uint64_t*)value;
         else {
             switch(regid) {
                 case UC_ARM_REG_XPSR:
