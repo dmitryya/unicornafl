@@ -1915,6 +1915,10 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
     { "SP_EL0", 0,4,1, 3,0,0, ARM_CP_STATE_AA64,
       ARM_CP_NO_MIGRATE, PL1_RW, NULL, 0, offsetof(CPUARMState, sp_el[0]),
       sp_el0_access, },
+    { .name = "SP_EL1", .state = ARM_CP_STATE_AA64,
+      .opc0 = 3, .opc1 = 4, .crn = 4, .crm = 1, .opc2 = 0,
+      .access = PL2_RW, .type = ARM_CP_NO_MIGRATE,
+      .fieldoffset = offsetof(CPUARMState, sp_el[1]) },
     { "SPSel", 0,4,2, 3,0,0, ARM_CP_STATE_AA64,
       ARM_CP_NO_MIGRATE, PL1_RW, NULL, 0, 0,
       NULL, spsel_read, spsel_write },
@@ -1929,6 +1933,9 @@ static const ARMCPRegInfo v8_el3_no_el2_cp_reginfo[] = {
     { "HCR_EL2", 0,1,1, 3,4,0, ARM_CP_STATE_AA64,
       ARM_CP_NO_MIGRATE, PL2_RW, NULL, 0, 0,
       NULL, arm_cp_read_zero, arm_cp_write_ignore },
+    { .name = "CPTR_EL2", .state = ARM_CP_STATE_BOTH,
+      .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 2,
+      .access = PL2_RW, .type = ARM_CP_CONST, .resetvalue = 0 },
     REGINFO_SENTINEL
 };
 
@@ -1957,6 +1964,60 @@ static void hcr_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
     raw_write(env, ri, value);
 }
 
+static void cptr_el2_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                           uint64_t value)
+{
+    /*
+     * For A-profile AArch32 EL3, if NSACR.CP10
+     * is 0 then HCPTR.{TCP11,TCP10} ignore writes and read as 1.
+     */
+    if (arm_feature(env, ARM_FEATURE_EL3) && !arm_el_is_aa64(env, 3) &&
+        !arm_is_secure(env) && !extract32(env->cp15.nsacr, 10, 1)) {
+        value &= ~(0x3 << 10);
+        value |= env->cp15.cptr_el[2] & (0x3 << 10);
+    }
+    env->cp15.cptr_el[2] = value;
+}
+
+static uint64_t cptr_el2_read(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    /*
+     * For A-profile AArch32 EL3, if NSACR.CP10
+     * is 0 then HCPTR.{TCP11,TCP10} ignore writes and read as 1.
+     */
+    uint64_t value = env->cp15.cptr_el[2];
+
+    if (arm_feature(env, ARM_FEATURE_EL3) && !arm_el_is_aa64(env, 3) &&
+        !arm_is_secure(env) && !extract32(env->cp15.nsacr, 10, 1)) {
+        value |= 0x3 << 10;
+    }
+    return value;
+}
+
+static CPAccessResult nsacr_access(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    /* The NSACR is RW at EL3, and RO for NS EL1 and NS EL2.
+     * At Secure EL1 it traps to EL3.
+     */
+    if (arm_current_el(env) == 3) {
+        return CP_ACCESS_OK;
+    }
+    if (arm_is_secure_below_el3(env)) {
+        return CP_ACCESS_TRAP_EL3;
+    }
+    return CP_ACCESS_TRAP_UNCATEGORIZED;
+}
+
+static CPAccessResult cptr_access(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    /* Check if CPTR accesses are set to trap to EL3 */
+    if (arm_current_el(env) == 2 && (env->cp15.cptr_el[3] & CPTR_TCPAC)) {
+        return CP_ACCESS_TRAP_EL3;
+    }
+
+    return CP_ACCESS_OK;
+}
+
 static const ARMCPRegInfo v8_el2_cp_reginfo[] = {
     { "HCR_EL2", 0,1,1, 3,4,0, ARM_CP_STATE_AA64,
       0, PL2_RW, NULL, 0, offsetof(CPUARMState, cp15.hcr_el2),
@@ -1972,6 +2033,11 @@ static const ARMCPRegInfo v8_el2_cp_reginfo[] = {
     { "VBAR_EL2", 0,12,0, 3,4,0, ARM_CP_STATE_AA64,
       0, PL2_RW, NULL, 0, offsetof(CPUARMState, cp15.vbar_el[2]),
       NULL, NULL, vbar_write, },
+    { .name = "CPTR_EL2", .state = ARM_CP_STATE_BOTH,
+      .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 2,
+      .access = PL2_RW, .accessfn = cptr_access, .resetvalue = 0,
+      .fieldoffset = offsetof(CPUARMState, cp15.cptr_el[2]),
+      .readfn = cptr_el2_read, .writefn = cptr_el2_write },
     REGINFO_SENTINEL
 };
 
@@ -1990,6 +2056,10 @@ static const ARMCPRegInfo v8_el3_cp_reginfo[] = {
     { "SCR_EL3", 0,1,1, 3,6,0, ARM_CP_STATE_AA64,
       ARM_CP_NO_MIGRATE, PL3_RW, NULL, 0, offsetof(CPUARMState, cp15.scr_el3),
       NULL, NULL, scr_write },
+    { .name = "CPTR_EL3", .state = ARM_CP_STATE_AA64,
+      .opc0 = 3, .opc1 = 6, .crn = 1, .crm = 1, .opc2 = 2,
+      .access = PL3_RW, .accessfn = cptr_access, .resetvalue = 0,
+      .fieldoffset = offsetof(CPUARMState, cp15.cptr_el[3]) },
     REGINFO_SENTINEL
 };
 
@@ -2720,6 +2790,45 @@ void register_cp_regs_for_features(ARMCPU *cpu)
             sctlr.type |= ARM_CP_SUPPRESS_TB_END;
         }
         define_one_arm_cp_reg(cpu, &sctlr);
+    }
+
+    /* The behaviour of NSACR is sufficiently various that we don't
+     * try to describe it in a single reginfo:
+     *  if EL3 is 64 bit, then trap to EL3 from S EL1,
+     *     reads as constant 0xc00 from NS EL1 and NS EL2
+     *  if EL3 is 32 bit, then RW at EL3, RO at NS EL1 and NS EL2
+     *  if v7 without EL3, register doesn't exist
+     *  if v8 without EL3, reads as constant 0xc00 from NS EL1 and NS EL2
+     */
+    if (arm_feature(env, ARM_FEATURE_EL3)) {
+        if (arm_feature(env, ARM_FEATURE_AARCH64)) {
+            ARMCPRegInfo nsacr = {
+                .name = "NSACR", .type = ARM_CP_CONST,
+                .cp = 15, .opc1 = 0, .crn = 1, .crm = 1, .opc2 = 2,
+                .access = PL1_RW, .accessfn = nsacr_access,
+                .resetvalue = 0xc00
+            };
+            define_one_arm_cp_reg(cpu, &nsacr);
+        } else {
+            ARMCPRegInfo nsacr = {
+                .name = "NSACR",
+                .cp = 15, .opc1 = 0, .crn = 1, .crm = 1, .opc2 = 2,
+                .access = PL3_RW | PL1_R,
+                .resetvalue = 0,
+                .fieldoffset = offsetof(CPUARMState, cp15.nsacr)
+            };
+            define_one_arm_cp_reg(cpu, &nsacr);
+        }
+    } else {
+        if (arm_feature(env, ARM_FEATURE_V8)) {
+            ARMCPRegInfo nsacr = {
+                .name = "NSACR", .type = ARM_CP_CONST,
+                .cp = 15, .opc1 = 0, .crn = 1, .crm = 1, .opc2 = 2,
+                .access = PL1_R,
+                .resetvalue = 0xc00
+            };
+            define_one_arm_cp_reg(cpu, &nsacr);
+        }
     }
 }
 

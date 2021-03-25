@@ -193,6 +193,8 @@ typedef struct CPUARMState {
         uint32_t c2_insn; /* MPU instruction cachable bits.  */
         uint32_t c3; /* MMU domain access control register
                         MPU write buffer control.  */
+        uint32_t nsacr; /* Non-secure access control register. */
+        uint64_t cptr_el[4];  /* ARMv8 feature trap registers */
         uint32_t pmsav5_data_ap; /* PMSAv5 MPU data access permissions */
         uint32_t pmsav5_insn_ap; /* PMSAv5 MPU insn access permissions */
         uint64_t hcr_el2; /* Hypervisor configuration register */
@@ -438,6 +440,12 @@ void pmccntr_sync(CPUARMState *env);
 #define SCTLR_TRE     (1U << 28)
 #define SCTLR_AFE     (1U << 29)
 #define SCTLR_TE      (1U << 30)
+
+#define CPTR_TCPAC    (1U << 31)
+#define CPTR_TTA      (1U << 20)
+#define CPTR_TFP      (1U << 10)
+#define CPTR_TZ       (1U << 8)   /* CPTR_EL2 */
+#define CPTR_EZ       (1U << 8)   /* CPTR_EL3 */
 
 #define CPSR_M (0x1fU)
 #define CPSR_T (1U << 5)
@@ -1061,6 +1069,17 @@ typedef enum CPAccessResult {
      * result in this failure is specifically defined by the architecture.
      */
     CP_ACCESS_TRAP_UNCATEGORIZED = 2,
+    /* As CP_ACCESS_TRAP, but for traps directly to EL2 or EL3 */
+    CP_ACCESS_TRAP_EL2 = 3,
+    CP_ACCESS_TRAP_EL3 = 4,
+    /* As CP_ACCESS_UNCATEGORIZED, but for traps directly to EL2 or EL3 */
+    CP_ACCESS_TRAP_UNCATEGORIZED_EL2 = 5,
+    CP_ACCESS_TRAP_UNCATEGORIZED_EL3 = 6,
+    /* Access fails and results in an exception syndrome for an FP access,
+     * trapped directly to EL2 or EL3
+     */
+    CP_ACCESS_TRAP_FP_EL2 = 7,
+    CP_ACCESS_TRAP_FP_EL3 = 8,
 } CPAccessResult;
 
 /* Access functions for coprocessor registers. These cannot fail and
