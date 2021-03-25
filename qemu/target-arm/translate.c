@@ -11381,7 +11381,7 @@ static inline void gen_intermediate_code_internal(ARMCPU *cpu,
             break;
         }
 #else
-        if (dc->pc >= 0xfffffff0 && arm_dc_feature(dc, ARM_FEATURE_M)) {
+        if (dc->pc >= 0xffffffe0 && arm_dc_feature(dc, ARM_FEATURE_M)) {
             /* We always get here via a jump, so know we are not in a
                conditional execution block.  */
             gen_exception_internal(dc, EXCP_EXCEPTION_EXIT);
