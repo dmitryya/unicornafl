@@ -699,11 +699,14 @@ static void phys_section_destroy(MemoryRegion *mr)
 
 static void phys_sections_free(PhysPageMap *map)
 {
-    while (map->sections_nb > 0) {
-        MemoryRegionSection *section = &map->sections[--map->sections_nb];
-        phys_section_destroy(section->mr);
+    if (map->sections != 0) {
+        while (map->sections_nb > 0) {
+            MemoryRegionSection *section = &map->sections[--map->sections_nb];
+            phys_section_destroy(section->mr);
+        }
+        g_free(map->sections);
+        map->sections = 0;
     }
-    g_free(map->sections);
     g_free(map->nodes);
 }
 
@@ -1174,12 +1177,6 @@ MemoryRegion *iotlb_to_region(AddressSpace *as, hwaddr index)
     return as->dispatch->map.sections[index & ~TARGET_PAGE_MASK].mr;
 }
 
-void phys_mem_clean(struct uc_struct* uc)
-{
-    AddressSpaceDispatch* d = uc->as.next_dispatch;
-    g_free(d->map.sections);
-}
-
 static void mem_begin(MemoryListener *listener)
 {
     AddressSpace *as = container_of(listener, AddressSpace, dispatch_listener);
@@ -1252,11 +1249,19 @@ void address_space_destroy_dispatch(AddressSpace *as)
 
     memory_listener_unregister(as->uc, &as->dispatch_listener);
     g_free(d->map.nodes);
+    if (d->map.sections) {
+        g_free(d->map.sections);
+        d->map.sections = 0;
+    }
     g_free(d);
 
     if (as->dispatch != as->next_dispatch) {
         d = as->next_dispatch;
         g_free(d->map.nodes);
+        if (d->map.sections) {
+            g_free(d->map.sections);
+            d->map.sections = 0;
+        }
         g_free(d);
     }
 

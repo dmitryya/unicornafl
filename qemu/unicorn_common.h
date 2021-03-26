@@ -47,7 +47,6 @@ static void release_common(void *t)
 
     // TODO(danghvu): these function is not available outside qemu
     // so we keep them here instead of outside uc_close.
-    phys_mem_clean(s->uc);
     address_space_destroy(&(s->uc->as));
     memory_free(s->uc);
     tb_cleanup(s->uc);
