@@ -11,11 +11,6 @@
 #include "arm_ldst.h"
 
 #ifndef CONFIG_USER_ONLY
-static inline int get_phys_addr(CPUARMState *env, target_ulong address,
-                                int access_type, int is_user,
-                                hwaddr *phys_ptr, int *prot,
-                                target_ulong *page_size);
-
 /* Definitions for the PMCCNTR and PMCR registers */
 #define PMCRD   0x8
 #define PMCRC   0x4
@@ -1152,7 +1147,7 @@ static void par_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
 }
 
 #ifndef CONFIG_USER_ONLY
-/* get_phys_addr() isn't present for user-mode-only targets */
+/* arm_get_phys_addr() isn't present for user-mode-only targets */
 
 static CPAccessResult ats_access(CPUARMState *env, const ARMCPRegInfo *ri)
 {
@@ -1175,7 +1170,7 @@ static void ats_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
     int ret, is_user = ri->opc2 & 2;
     int access_type = ri->opc2 & 1;
 
-    ret = get_phys_addr(env, value, access_type, is_user,
+    ret = arm_get_phys_addr(env, value, access_type, is_user,
                         &phys_addr, &prot, &page_size);
     if (extended_addresses_enabled(env)) {
         /* ret is a DFSR/IFSR value for the long descriptor
@@ -4176,7 +4171,7 @@ static int get_phys_addr_mpu(CPUARMState *env, uint32_t address,
     return 0;
 }
 
-/* get_phys_addr - get the physical address for this virtual address
+/* arm_get_phys_addr - get the physical address for this virtual address
  *
  * Find the physical address corresponding to the given virtual address,
  * by doing a translation table walk on MMU based systems or using the
@@ -4199,7 +4194,7 @@ static int get_phys_addr_mpu(CPUARMState *env, uint32_t address,
  * @prot: set to the permissions for the page containing phys_ptr
  * @page_size: set to the size of the page containing phys_ptr
  */
-static inline int get_phys_addr(CPUARMState *env, target_ulong address,
+int arm_get_phys_addr(CPUARMState *env, target_ulong address,
                                 int access_type, int is_user,
                                 hwaddr *phys_ptr, int *prot,
                                 target_ulong *page_size)
@@ -4216,7 +4211,7 @@ static inline int get_phys_addr(CPUARMState *env, target_ulong address,
         return 0;
     } else if (arm_feature(env, ARM_FEATURE_MPU)) {
         *page_size = TARGET_PAGE_SIZE;
-    return get_phys_addr_mpu(env, address, access_type, is_user, phys_ptr,
+        return get_phys_addr_mpu(env, address, access_type, is_user, phys_ptr,
                  prot);
     } else if (extended_addresses_enabled(env)) {
         return get_phys_addr_lpae(env, address, access_type, is_user, phys_ptr,
@@ -4242,7 +4237,7 @@ int arm_cpu_handle_mmu_fault(CPUState *cs, vaddr address,
     bool same_el = (arm_current_el(env) != 0);
 
     is_user = mmu_idx == MMU_USER_IDX;
-    ret = get_phys_addr(env, address, access_type, is_user, &phys_addr, &prot,
+    ret = arm_get_phys_addr(env, address, access_type, is_user, &phys_addr, &prot,
                         &page_size);
     if (ret == 0) {
         /* Map a single [sub]page.  */
@@ -4283,7 +4278,7 @@ hwaddr arm_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
     int prot;
     int ret;
 
-    ret = get_phys_addr(&cpu->env, addr, 0, 0, &phys_addr, &prot, &page_size);
+    ret = arm_get_phys_addr(&cpu->env, addr, 0, 0, &phys_addr, &prot, &page_size);
 
     if (ret != 0) {
         return -1;

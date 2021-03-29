@@ -195,15 +195,15 @@ _setup_prototype(_uc, "uc_afl_fuzz", ucaflret,
 _uc.uc_hook_add = _uc.uc_hook_add
 _uc.uc_hook_add.restype = ucerr
 
-UC_HOOK_CODE_CB = ctypes.CFUNCTYPE(None, uc_engine, ctypes.c_uint64, ctypes.c_size_t, ctypes.c_void_p)
+UC_HOOK_CODE_CB = ctypes.CFUNCTYPE(None, uc_engine, ctypes.c_uint64, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_uint64)
 UC_HOOK_INSN_INVALID_CB = ctypes.CFUNCTYPE(ctypes.c_bool, uc_engine, ctypes.c_void_p)
 UC_HOOK_MEM_INVALID_CB = ctypes.CFUNCTYPE(
     ctypes.c_bool, uc_engine, ctypes.c_int,
-    ctypes.c_uint64, ctypes.c_int, ctypes.c_int64, ctypes.c_void_p
+    ctypes.c_uint64, ctypes.c_int, ctypes.c_int64, ctypes.c_void_p, ctypes.c_uint64
 )
 UC_HOOK_MEM_ACCESS_CB = ctypes.CFUNCTYPE(
     None, uc_engine, ctypes.c_int,
-    ctypes.c_uint64, ctypes.c_int, ctypes.c_int64, ctypes.c_void_p
+    ctypes.c_uint64, ctypes.c_int, ctypes.c_int64, ctypes.c_void_p, ctypes.c_uint64
 )
 UC_HOOK_INTR_CB = ctypes.CFUNCTYPE(
     None, uc_engine, ctypes.c_uint32, ctypes.c_void_p
@@ -749,20 +749,20 @@ class Uc(object):
             raise UcError(status)
         return result.value
 
-    def _hookcode_cb(self, handle, address, size, user_data):
+    def _hookcode_cb(self, handle, address, size, user_data, phys_addr):
         # call user's callback with self object
         (cb, data) = self._callbacks[user_data]
-        cb(self, address, size, data)
+        cb(self, address, size, data, phys_addr)
 
-    def _hook_mem_invalid_cb(self, handle, access, address, size, value, user_data):
+    def _hook_mem_invalid_cb(self, handle, access, address, size, value, user_data, phys_addr):
         # call user's callback with self object
         (cb, data) = self._callbacks[user_data]
-        return cb(self, access, address, size, value, data)
+        return cb(self, access, address, size, value, data, phys_addr)
 
-    def _hook_mem_access_cb(self, handle, access, address, size, value, user_data):
+    def _hook_mem_access_cb(self, handle, access, address, size, value, user_data, phys_addr):
         # call user's callback with self object
         (cb, data) = self._callbacks[user_data]
-        cb(self, access, address, size, value, data)
+        cb(self, access, address, size, value, data, phys_addr)
 
     def _hook_intr_cb(self, handle, intno, user_data):
         # call user's callback with self object

@@ -189,8 +189,9 @@ typedef enum uc_afl_ret {
   @address: address where the code is being executed
   @size: size of machine instruction(s) being executed, or 0 when size is unknown
   @user_data: user data passed to tracing APIs.
+  @phys_address: physical address where the code is being executed
 */
-typedef void (*uc_cb_hookcode_t)(uc_engine *uc, uint64_t address, uint32_t size, void *user_data);
+typedef void (*uc_cb_hookcode_t)(uc_engine *uc, uint64_t address, uint32_t size, void *user_data, uint64_t phys_address);
 
 /*
   Callback function for tracing interrupts (for uc_hook_intr())
@@ -301,9 +302,10 @@ typedef enum uc_hook_type {
   @size: size of data being read or written
   @value: value of data being written to memory, or irrelevant if type = READ.
   @user_data: user data passed to tracing APIs
+  @phys_address: physical address where the code is being executed
 */
 typedef void (*uc_cb_hookmem_t)(uc_engine *uc, uc_mem_type type,
-        uint64_t address, int size, int64_t value, void *user_data);
+        uint64_t address, int size, int64_t value, void *user_data, uint64_t phys_address);
 
 /*
   Callback function for handling invalid memory access events (UNMAPPED and
@@ -314,6 +316,7 @@ typedef void (*uc_cb_hookmem_t)(uc_engine *uc, uc_mem_type type,
   @size: size of data being read or written
   @value: value of data being written to memory, or irrelevant if type = READ.
   @user_data: user data passed to tracing APIs
+  @phys_address: physical address where the code is being executed
 
   @return: return true to continue, or false to stop program (due to invalid memory).
            NOTE: returning true to continue execution will only work if the accessed
@@ -329,7 +332,7 @@ typedef void (*uc_cb_hookmem_t)(uc_engine *uc, uc_mem_type type,
            but the fetch must succeed if execution is to resume.
 */
 typedef bool (*uc_cb_eventmem_t)(uc_engine *uc, uc_mem_type type,
-        uint64_t address, int size, int64_t value, void *user_data);
+        uint64_t address, int size, int64_t value, void *user_data, uint64_t phys_address);
 
 /*
   Memory region mapped by uc_mem_map() and uc_mem_map_ptr()

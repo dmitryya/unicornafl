@@ -372,6 +372,10 @@ int cpu_arm_signal_handler(int host_signum, void *pinfo,
 int arm_cpu_handle_mmu_fault(CPUState *cpu, vaddr address, int rw,
                              int mmu_idx);
 
+int arm_get_phys_addr(CPUARMState *env, target_ulong address,
+                                int access_type, int is_user,
+                                hwaddr *phys_ptr, int *prot,
+                                target_ulong *page_size);
 /**
  * pmccntr_sync
  * @env: CPUARMState

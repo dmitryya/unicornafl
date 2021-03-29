@@ -21,7 +21,7 @@ typedef uint64_t ppcreg_t;
 typedef uint32_t ppcreg_t;
 #endif
 
-static uint64_t ppc_mem_redirect(uint64_t address)
+static uint64_t ppc_mem_redirect(struct uc_struct *uc, uint64_t address)
 {
 /*    // kseg0 range masks off high address bit
     if (address >= 0x80000000 && address <= 0x9fffffff)

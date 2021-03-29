@@ -100,6 +100,7 @@
 #define arm_cpu_exec_interrupt arm_cpu_exec_interrupt_arm
 #define arm_cpu_finalizefn arm_cpu_finalizefn_arm
 #define arm_cpu_get_phys_page_debug arm_cpu_get_phys_page_debug_arm
+#define arm_get_phys_addr arm_get_phys_addr_arm
 #define arm_cpu_handle_mmu_fault arm_cpu_handle_mmu_fault_arm
 #define arm_cpu_initfn arm_cpu_initfn_arm
 #define arm_cpu_list arm_cpu_list_arm

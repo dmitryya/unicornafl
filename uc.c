@@ -418,11 +418,12 @@ uc_err uc_reg_write(uc_engine *uc, int regid, const void *value)
 static bool check_mem_area(uc_engine *uc, uint64_t address, size_t size)
 {
     size_t count = 0, len;
+    uint64_t phys_addr;
 
     while(count < size) {
-        MemoryRegion *mr = memory_mapping(uc, address);
+        MemoryRegion *mr = memory_mapping(uc, address, &phys_addr);
         if (mr) {
-            len = (size_t)MIN(size - count, mr->end - address);
+            len = (size_t)MIN(size - count, mr->end - phys_addr);
             count += len;
             address += len;
         } else  // this address is not mapped in yet
@@ -438,21 +439,19 @@ uc_err uc_mem_read(uc_engine *uc, uint64_t address, void *_bytes, size_t size)
 {
     size_t count = 0, len;
     uint8_t *bytes = _bytes;
-
-    if (uc->mem_redirect) {
-        address = uc->mem_redirect(address);
-    }
+    uint64_t phys_addr;
 
     if (!check_mem_area(uc, address, size))
         return UC_ERR_READ_UNMAPPED;
 
     // memory area can overlap adjacent memory blocks
     while(count < size) {
-        MemoryRegion *mr = memory_mapping(uc, address);
+        MemoryRegion *mr = memory_mapping(uc, address, &phys_addr);
         if (mr) {
-            len = (size_t)MIN(size - count, mr->end - address);
-            if (uc->read_mem(&uc->as, address, bytes, len) == false)
+            len = (size_t)MIN(size - count, mr->end - phys_addr);
+            if (uc->read_mem(&uc->as, phys_addr, bytes, len) == false) {
                 break;
+            }
             count += len;
             address += len;
             bytes += len;
@@ -471,25 +470,23 @@ uc_err uc_mem_write(uc_engine *uc, uint64_t address, const void *_bytes, size_t 
 {
     size_t count = 0, len;
     const uint8_t *bytes = _bytes;
+    uint64_t phys_addr;
 
-    if (uc->mem_redirect) {
-        address = uc->mem_redirect(address);
-    }
-
-    if (!check_mem_area(uc, address, size))
+    if (!check_mem_area(uc, address, size)) {
         return UC_ERR_WRITE_UNMAPPED;
+    }
 
     // memory area can overlap adjacent memory blocks
     while(count < size) {
-        MemoryRegion *mr = memory_mapping(uc, address);
+        MemoryRegion *mr = memory_mapping(uc, address, &phys_addr);
         if (mr) {
             uint32_t operms = mr->perms;
             if (!(operms & UC_PROT_WRITE)) // write protected
                 // but this is not the program accessing memory, so temporarily mark writable
                 uc->readonly_mem(mr, false);
 
-            len = (size_t)MIN(size - count, mr->end - address);
-            if (uc->write_mem(&uc->as, address, bytes, len) == false)
+            len = (size_t)MIN(size - count, mr->end - phys_addr);
+            if (uc->write_mem(&uc->as, phys_addr, bytes, len) == false)
                 break;
 
             if (!(operms & UC_PROT_WRITE)) // write protected
@@ -503,10 +500,11 @@ uc_err uc_mem_write(uc_engine *uc, uint64_t address, const void *_bytes, size_t 
             break;
     }
 
-    if (count == size)
+    if (count == size) {
         return UC_ERR_OK;
-    else
+    } else {
         return UC_ERR_WRITE_UNMAPPED;
+    }
 }
 
 #define TIMEOUT_STEP 2    // microseconds
@@ -787,10 +785,6 @@ uc_err uc_mem_map(uc_engine *uc, uint64_t address, size_t size, uint32_t perms)
 {
     uc_err res;
 
-    if (uc->mem_redirect) {
-        address = uc->mem_redirect(address);
-    }
-
     res = mem_map_check(uc, address, size, perms);
     if (res)
         return res;
@@ -805,10 +799,6 @@ uc_err uc_mem_map_ptr(uc_engine *uc, uint64_t address, size_t size, uint32_t per
 
     if (ptr == NULL)
         return UC_ERR_ARG;
-
-    if (uc->mem_redirect) {
-        address = uc->mem_redirect(address);
-    }
 
     res = mem_map_check(uc, address, size, perms);
     if (res)
@@ -976,6 +966,7 @@ uc_err uc_mem_protect(struct uc_struct *uc, uint64_t address, size_t size, uint3
 {
     MemoryRegion *mr;
     uint64_t addr = address;
+    uint64_t phys_addr;
     size_t count, len;
     bool remove_exec = false;
 
@@ -995,10 +986,6 @@ uc_err uc_mem_protect(struct uc_struct *uc, uint64_t address, size_t size, uint3
     if ((perms & ~UC_PROT_ALL) != 0)
         return UC_ERR_ARG;
 
-    if (uc->mem_redirect) {
-        address = uc->mem_redirect(address);
-    }
-
     // check that user's entire requested block is mapped
     if (!check_mem_area(uc, address, size))
         return UC_ERR_NOMEM;
@@ -1008,12 +995,12 @@ uc_err uc_mem_protect(struct uc_struct *uc, uint64_t address, size_t size, uint3
     addr = address;
     count = 0;
     while(count < size) {
-        mr = memory_mapping(uc, addr);
-        len = (size_t)MIN(size - count, mr->end - addr);
-        if (!split_region(uc, mr, addr, len, false))
+        mr = memory_mapping(uc, addr, &phys_addr);
+        len = (size_t)MIN(size - count, mr->end - phys_addr);
+        if (!split_region(uc, mr, phys_addr, len, false))
             return UC_ERR_NOMEM;
 
-        mr = memory_mapping(uc, addr);
+        mr = memory_mapping(uc, addr, NULL);
         // will this remove EXEC permission?
         if (((mr->perms & UC_PROT_EXEC) != 0) && ((perms & UC_PROT_EXEC) == 0))
             remove_exec = true;
@@ -1038,6 +1025,7 @@ uc_err uc_mem_unmap(struct uc_struct *uc, uint64_t address, size_t size)
 {
     MemoryRegion *mr;
     uint64_t addr;
+    uint64_t phys_addr;
     size_t count, len;
 
     if (size == 0)
@@ -1052,10 +1040,6 @@ uc_err uc_mem_unmap(struct uc_struct *uc, uint64_t address, size_t size)
     if ((size & uc->target_page_align) != 0)
         return UC_ERR_ARG;
 
-    if (uc->mem_redirect) {
-        address = uc->mem_redirect(address);
-    }
-
     // check that user's entire requested block is mapped
     if (!check_mem_area(uc, address, size))
         return UC_ERR_NOMEM;
@@ -1065,14 +1049,14 @@ uc_err uc_mem_unmap(struct uc_struct *uc, uint64_t address, size_t size)
     addr = address;
     count = 0;
     while(count < size) {
-        mr = memory_mapping(uc, addr);
-        len = (size_t)MIN(size - count, mr->end - addr);
-        if (!split_region(uc, mr, addr, len, true))
+        mr = memory_mapping(uc, addr, &phys_addr);
+        len = (size_t)MIN(size - count, mr->end - phys_addr);
+        if (!split_region(uc, mr, phys_addr, len, true))
             return UC_ERR_NOMEM;
 
         // if we can retrieve the mapping, then no splitting took place
         // so unmap here
-        mr = memory_mapping(uc, addr);
+        mr = memory_mapping(uc, addr, NULL);
         if (mr != NULL)
            uc->memory_unmap(uc, mr);
         count += len;
@@ -1094,7 +1078,7 @@ uc_err uc_mem_unmap(struct uc_struct *uc, uint64_t address, size_t size)
 
 
 // find the memory region of this address
-MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address)
+MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address, uint64_t* out_address)
 {
     unsigned int i;
 
@@ -1102,7 +1086,11 @@ MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address)
         return NULL;
 
     if (uc->mem_redirect) {
-        address = uc->mem_redirect(address);
+        address = uc->mem_redirect(uc, address);
+    }
+
+    if (out_address != NULL) {
+        *out_address = address;
     }
 
     // try with the cache index first
@@ -1238,6 +1226,11 @@ void helper_uc_tracecode(int32_t size, uc_hook_type type, void *handle, int64_t 
     struct uc_struct *uc = handle;
     struct list_item *cur;
     struct hook *hook;
+    uint64_t phys_addr = address;
+
+    if (uc->mem_redirect) {
+        phys_addr = uc->mem_redirect(uc, address);
+    }
 
     // sync PC in CPUArchState with address
     if (uc->set_pc) {
@@ -1247,8 +1240,8 @@ void helper_uc_tracecode(int32_t size, uc_hook_type type, void *handle, int64_t 
     for (cur = uc->hook[type].head; cur != NULL && (hook = (struct hook *)cur->data); cur = cur->next) {
         if (hook->to_delete)
             continue;
-        if (HOOK_BOUND_CHECK(hook, (uint64_t)address)) {
-            ((uc_cb_hookcode_t)hook->callback)(uc, address, size, hook->user_data);
+        if (HOOK_BOUND_CHECK(hook, (uint64_t)phys_addr)) {
+            ((uc_cb_hookcode_t)hook->callback)(uc, address, size, hook->user_data, phys_addr);
         }
     }
 }

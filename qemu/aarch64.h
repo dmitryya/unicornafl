@@ -100,6 +100,7 @@
 #define arm_cpu_exec_interrupt arm_cpu_exec_interrupt_aarch64
 #define arm_cpu_finalizefn arm_cpu_finalizefn_aarch64
 #define arm_cpu_get_phys_page_debug arm_cpu_get_phys_page_debug_aarch64
+#define arm_get_phys_addr arm_get_phys_addr_aarch64
 #define arm_cpu_handle_mmu_fault arm_cpu_handle_mmu_fault_aarch64
 #define arm_cpu_initfn arm_cpu_initfn_aarch64
 #define arm_cpu_list arm_cpu_list_aarch64

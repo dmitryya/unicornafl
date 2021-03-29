@@ -74,7 +74,7 @@ typedef int (*uc_cpus_init)(struct uc_struct *, const char *);
 typedef bool (*uc_args_int_t)(int intno);
 
 // some architecture redirect virtual memory to physical memory like Mips
-typedef uint64_t (*uc_mem_redirect_t)(uint64_t address);
+typedef uint64_t (*uc_mem_redirect_t)(struct uc_struct *, uint64_t address);
 
 // validate if Unicorn supports hooking a given instruction
 typedef bool(*uc_insn_hook_validate)(uint32_t insn_enum);
@@ -112,6 +112,12 @@ enum uc_hook_idx {
     UC_HOOK_INSN_INVALID_IDX,
 
     UC_HOOK_MAX,
+};
+
+enum uc_mem_access_type {
+  UC_MEM_ACCESS_READ,
+  UC_MEM_ACCESS_WRITE,
+  UC_MEM_ACCESS_EXEC,
 };
 
 #define HOOK_FOREACH_VAR_DECLARE                          \
@@ -260,7 +266,7 @@ struct uc_context {
 };
 
 // check if this address is mapped in (via uc_mem_map())
-MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address);
+MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address, uint64_t* out_address);
 
 #endif
 /* vim: set ts=4 noet:  */

@@ -108,6 +108,7 @@ symbols = (
     'arm_cpu_exec_interrupt',
     'arm_cpu_finalizefn',
     'arm_cpu_get_phys_page_debug',
+    'arm_get_phys_addr',
     'arm_cpu_handle_mmu_fault',
     'arm_cpu_initfn',
     'arm_cpu_list',
