@@ -325,15 +325,16 @@ MemoryRegion *address_space_translate(AddressSpace *as, hwaddr addr,
     MemoryRegion *mr;
     hwaddr len = *plen;
 
-    for (;;) {
-        section = address_space_translate_internal(as->dispatch, addr, &addr, plen, true);
-        mr = section->mr;
-        if (mr->ops == NULL) {
-            *xlat = 0;
-            return NULL;
-        }
+    if (as->dispatch == NULL) {
+        *xlat = 0;
+        return NULL;
+    }
 
-        break;
+    section = address_space_translate_internal(as->dispatch, addr, &addr, plen, true);
+    mr = section->mr;
+    if (mr->ops == NULL) {
+        *xlat = 0;
+        return NULL;
     }
 
     *plen = len;
