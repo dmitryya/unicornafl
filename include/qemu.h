@@ -6,7 +6,7 @@
 
 struct uc_struct;
 
-#define OPC_BUF_SIZE 640
+#define OPC_BUF_SIZE 1024
 
 #include "sysemu/sysemu.h"
 #include "sysemu/cpus.h"
