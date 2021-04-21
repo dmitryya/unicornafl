@@ -245,6 +245,26 @@ static int arm_cpus_init(struct uc_struct *uc, const char *cpu_model)
     return 0;
 }
 
+static uint64_t arm_mem_redirect(struct uc_struct* uc, uint64_t address)
+{
+    CPUArchState *env = uc->cpu->env_ptr;
+    hwaddr phys_addr;
+    int prot;
+    target_ulong page_size;
+
+    /* UC_MEM_ACCESS_READ access type is used because it is less restricted and access type
+     * correctness will be check later by a caller.  The same about `is_user' arg. */
+    int ret = arm_get_phys_addr(env, address, UC_MEM_ACCESS_READ, 0 /* is_user */,
+                                &phys_addr, &prot, &page_size);
+    if (!ret) {
+        return  phys_addr;
+    }
+
+    /* arm_get_phys_addr failed, this may happened if address is already a physical one.
+     * so, just return it without converting. */
+    return address;
+}
+
 #ifdef TARGET_WORDS_BIGENDIAN
 void armeb_uc_init(struct uc_struct* uc)
 #else
@@ -257,6 +277,7 @@ void arm_uc_init(struct uc_struct* uc)
     uc->set_pc = arm_set_pc;
     uc->stop_interrupt = arm_stop_interrupt;
     uc->release = arm_release;
+    uc->mem_redirect = arm_mem_redirect;
     uc->query = arm_query;
     uc->cpus_init = arm_cpus_init;
     uc_common_init(uc);
