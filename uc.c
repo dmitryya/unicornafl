@@ -580,6 +580,10 @@ uc_err uc_emu_start(uc_engine* uc, uint64_t begin, uint64_t until, uint64_t time
     uc->size_recur_mem = 0;
     uc->timed_out = false;
 
+#if defined(UNICORN_AFL)
+    uc->exit_count = 0;
+#endif
+
     switch(uc->arch) {
         default:
             break;
