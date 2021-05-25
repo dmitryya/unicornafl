@@ -2090,6 +2090,8 @@ symbols = (
     'memory_region_write_accessor',
     'memory_region_wrong_endianness',
     'memory_try_enable_merging',
+    'memory_region_perm_del',
+    'memory_region_perm_del_all',
     'module_call_init',
     'module_load',
     'mpidr_cp_reginfo',

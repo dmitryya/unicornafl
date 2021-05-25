@@ -27,6 +27,37 @@
 
 #include "qemu/include/qemu/queue.h"
 
+static bool memory_region_perms_is_writable(MemoryRegion *mr)
+{
+    bool is_writable = false;
+    MemoryRegionPermission *perms;
+
+    QTAILQ_FOREACH(perms, &mr->perms, entry) {
+        if (perms->perms & UC_PROT_WRITE) {
+            is_writable = true;
+            break;
+        }
+    }
+
+    return is_writable;
+}
+
+static bool memory_region_perms_is_executable(MemoryRegion *mr)
+{
+    bool is_executable = false;
+    MemoryRegionPermission *perms;
+
+    QTAILQ_FOREACH(perms, &mr->perms, entry) {
+        if (perms->perms & UC_PROT_EXEC) {
+            is_executable = true;
+            break;
+        }
+    }
+
+    return is_executable;
+}
+
+
 UNICORN_EXPORT
 unsigned int uc_version(unsigned int *major, unsigned int *minor)
 {
@@ -371,7 +402,7 @@ uc_err uc_close(uc_engine *uc)
     // finally, free uc itself.
     memset(uc, 0, sizeof(*uc));
     free(uc);
-    
+
     return UC_ERR_OK;
 }
 
@@ -421,13 +452,14 @@ static bool check_mem_area(uc_engine *uc, uint64_t address, size_t size)
     uint64_t phys_addr;
 
     while(count < size) {
-        MemoryRegion *mr = memory_mapping(uc, address, &phys_addr);
+        MemoryRegion *mr = memory_mapping(uc, address, &phys_addr, NULL);
         if (mr) {
-            len = (size_t)MIN(size - count, mr->end - phys_addr);
+            len = (size_t)MIN(size - count, mr->end - phys_addr + 1);
             count += len;
             address += len;
-        } else  // this address is not mapped in yet
+        } else  {// this address is not mapped in yet
             break;
+        }
     }
 
     return (count == size);
@@ -446,9 +478,9 @@ uc_err uc_mem_read(uc_engine *uc, uint64_t address, void *_bytes, size_t size)
 
     // memory area can overlap adjacent memory blocks
     while(count < size) {
-        MemoryRegion *mr = memory_mapping(uc, address, &phys_addr);
+        MemoryRegion *mr = memory_mapping(uc, address, &phys_addr, NULL);
         if (mr) {
-            len = (size_t)MIN(size - count, mr->end - phys_addr);
+            len = (size_t)MIN(size - count, mr->end - phys_addr + 1);
             if (uc->read_mem(&uc->as, phys_addr, bytes, len) == false) {
                 break;
             }
@@ -471,6 +503,7 @@ uc_err uc_mem_write(uc_engine *uc, uint64_t address, const void *_bytes, size_t 
     size_t count = 0, len;
     const uint8_t *bytes = _bytes;
     uint64_t phys_addr;
+    uint32_t perms;
 
     if (!check_mem_area(uc, address, size)) {
         return UC_ERR_WRITE_UNMAPPED;
@@ -478,18 +511,17 @@ uc_err uc_mem_write(uc_engine *uc, uint64_t address, const void *_bytes, size_t 
 
     // memory area can overlap adjacent memory blocks
     while(count < size) {
-        MemoryRegion *mr = memory_mapping(uc, address, &phys_addr);
+        MemoryRegion *mr = memory_mapping(uc, address, &phys_addr, &perms);
         if (mr) {
-            uint32_t operms = mr->perms;
-            if (!(operms & UC_PROT_WRITE)) // write protected
+            if (!(perms & UC_PROT_WRITE)) // write protected
                 // but this is not the program accessing memory, so temporarily mark writable
                 uc->readonly_mem(mr, false);
 
-            len = (size_t)MIN(size - count, mr->end - phys_addr);
+            len = (size_t)MIN(size - count, mr->end - phys_addr + 1);
             if (uc->write_mem(&uc->as, phys_addr, bytes, len) == false)
                 break;
 
-            if (!(operms & UC_PROT_WRITE)) // write protected
+            if (!(perms & UC_PROT_WRITE)) // write protected
                 // now write protect it again
                 uc->readonly_mem(mr, true);
 
@@ -551,7 +583,7 @@ static void clear_deleted_hooks(uc_engine *uc)
     struct list_item * cur;
     struct hook * hook;
     int i;
-    
+
     for (cur = uc->hooks_to_del.head; cur != NULL && (hook = (struct hook *)cur->data); cur = cur->next) {
         assert(hook->to_delete);
         for (i = 0; i < UC_HOOK_MAX; i++) {
@@ -715,15 +747,15 @@ static bool memory_overlap(struct uc_struct *uc, uint64_t begin, size_t size)
 
     for(i = 0; i < uc->mapped_block_count; i++) {
         // begin address falls inside this region?
-        if (begin >= uc->mapped_blocks[i]->addr && begin <= uc->mapped_blocks[i]->end - 1)
+        if (begin >= uc->mapped_blocks[i]->addr && begin <= uc->mapped_blocks[i]->end)
             return true;
 
         // end address falls inside this region?
-        if (end >= uc->mapped_blocks[i]->addr && end <= uc->mapped_blocks[i]->end - 1)
+        if (end >= uc->mapped_blocks[i]->addr && end <= uc->mapped_blocks[i]->end)
             return true;
 
         // this region falls totally inside this range?
-        if (begin < uc->mapped_blocks[i]->addr && end > uc->mapped_blocks[i]->end - 1)
+        if (begin < uc->mapped_blocks[i]->addr && end > uc->mapped_blocks[i]->end)
             return true;
     }
 
@@ -842,33 +874,32 @@ static uint8_t *copy_region(struct uc_struct *uc, MemoryRegion *mr)
  */
 // TODO: investigate whether qemu region manipulation functions already offered
 // this capability
-static bool split_region(struct uc_struct *uc, MemoryRegion *mr, uint64_t address,
-        size_t size, bool do_delete)
+static bool split_region(struct uc_struct *uc, MemoryRegion *mr, uint64_t address, size_t size)
 {
     uint8_t *backup;
-    uint32_t perms;
     uint64_t begin, end, chunk_end;
     size_t l_size, m_size, r_size;
     RAMBlock *block = NULL;
     bool prealloc = false;
+    MemoryRegionPermission *cur, *next;
 
     chunk_end = address + size;
 
     // if this region belongs to area [address, address+size],
     // then there is no work to do.
-    if (address <= mr->addr && chunk_end >= mr->end)
+    if (address <= mr->addr && chunk_end > mr->end)
         return true;
 
     if (size == 0)
         // trivial case
         return true;
 
-    if (address >= mr->end || chunk_end <= mr->addr)
+    if (address > mr->end || chunk_end <= mr->addr)
         // impossible case
         return false;
 
     QTAILQ_FOREACH(block, &uc->ram_list.blocks, next) {
-        if (block->offset <= mr->addr && block->length >= (mr->end - mr->addr)) {
+        if (block->offset <= mr->addr && block->length >= (mr->end - mr->addr + 1)) {
             break;
         }
     }
@@ -889,9 +920,11 @@ static bool split_region(struct uc_struct *uc, MemoryRegion *mr, uint64_t addres
     }
 
     // save the essential information required for the split before mr gets deleted
-    perms = mr->perms;
     begin = mr->addr;
-    end = mr->end;
+    end = mr->end + 1;
+    // copy the HEAD of perms_overlays
+    QTAILQ_HEAD(operms, MemoryRegionPermission) operms;
+    QTAILQ_MOVE(&operms, &mr->perms, entry);
 
     // unmap this region first, then do split it later
     if (uc_mem_unmap(uc, mr->addr, (size_t)int128_get64(mr->size)) != UC_ERR_OK)
@@ -921,38 +954,37 @@ static bool split_region(struct uc_struct *uc, MemoryRegion *mr, uint64_t addres
     // allocation at this point
     if (l_size > 0) {
         if (!prealloc) {
-            if (uc_mem_map(uc, begin, l_size, perms) != UC_ERR_OK)
+            if (uc_mem_map(uc, begin, l_size, UC_PROT_NONE) != UC_ERR_OK)
                 goto error;
             if (uc_mem_write(uc, begin, backup, l_size) != UC_ERR_OK)
                 goto error;
         } else {
-            if (uc_mem_map_ptr(uc, begin, l_size, perms, backup) != UC_ERR_OK)
-                goto error;
-        }
-    }
-
-    if (m_size > 0 && !do_delete) {
-        if (!prealloc) {
-            if (uc_mem_map(uc, address, m_size, perms) != UC_ERR_OK)
-                goto error;
-            if (uc_mem_write(uc, address, backup + l_size, m_size) != UC_ERR_OK)
-                goto error;
-        } else {
-            if (uc_mem_map_ptr(uc, address, m_size, perms, backup + l_size) != UC_ERR_OK)
+            if (uc_mem_map_ptr(uc, begin, l_size, UC_PROT_NONE, backup) != UC_ERR_OK)
                 goto error;
         }
     }
 
     if (r_size > 0) {
         if (!prealloc) {
-            if (uc_mem_map(uc, chunk_end, r_size, perms) != UC_ERR_OK)
+            if (uc_mem_map(uc, chunk_end, r_size, UC_PROT_NONE) != UC_ERR_OK)
                 goto error;
             if (uc_mem_write(uc, chunk_end, backup + l_size + m_size, r_size) != UC_ERR_OK)
                 goto error;
         } else {
-            if (uc_mem_map_ptr(uc, chunk_end, r_size, perms, backup + l_size + m_size) != UC_ERR_OK)
+            if (uc_mem_map_ptr(uc, chunk_end, r_size, UC_PROT_NONE, backup + l_size + m_size) != UC_ERR_OK)
                 goto error;
         }
+    }
+
+    // apply permissions overlay to new MemoryRegions
+    QTAILQ_FOREACH_SAFE(cur, &operms, entry, next) {
+        if (!((cur->offset + begin) == address && cur->size == m_size)) {  // skip setting permissions for deleted regions
+          if (uc_mem_protect(uc, begin + cur->offset, cur->size, cur->perms) != UC_ERR_OK) {
+              goto error;
+          }
+        }
+        QTAILQ_REMOVE(&operms, cur, entry);
+        free(cur);
     }
 
     if (!prealloc)
@@ -965,6 +997,101 @@ error:
     return false;
 }
 
+static bool split_perm_region(struct uc_struct *uc, MemoryRegion *mr, uint64_t address,
+                              size_t size, uint32_t perms)
+{
+    MemoryRegionPermission *cur, *next, *before;
+    uint64_t off = address - mr->addr;
+    uint64_t chunk_end = off + size - 1;
+    MemoryRegionPermission *operm;
+
+    if (size == 0)
+        // trivial case
+        return true;
+
+    if (!(address >= mr->addr && chunk_end <= mr->end)) {
+        // wrong case
+        return false;
+    }
+
+    before = NULL;
+    QTAILQ_FOREACH_SAFE(cur, &mr->perms, entry, next) {
+        uint64_t cur_chunk_end = cur->offset + cur->size - 1;
+        /* case 0
+         * |---CUR--|
+         *               |------NEW------|
+         */
+        if (cur_chunk_end < off) {
+            continue;
+        }
+        /* case 1
+         *    |---CUR--|               or     |---CUR---|
+         *        |------NEW------|              |--NEW-|
+         */
+        if (cur->offset < off && cur_chunk_end >= off &&
+            cur_chunk_end <= chunk_end) {
+            cur->size = off - cur->offset;
+            continue;
+        }
+        /* case 2
+         *    |-----CUR----|
+         *      |--NEW--|
+         */
+        if (cur->offset < off && cur_chunk_end > chunk_end) {
+            operm = g_new(MemoryRegionPermission, 1);
+            operm->offset = cur->offset;
+            operm->size = off - cur->offset;
+            operm->perms = cur->perms;
+            QTAILQ_INSERT_BEFORE(cur, operm, entry);
+
+            cur->size = cur_chunk_end - chunk_end;
+            cur->offset = chunk_end + 1;
+            before = cur;
+            break;
+        }
+        /* case 3
+         *    |---CUR--|           or       |---CUR---|
+         *  |------NEW------|               |---NEW---|
+         */
+        if (cur->offset >= off && chunk_end >= cur_chunk_end) {
+            QTAILQ_REMOVE(&mr->perms, cur, entry);
+            continue;
+        }
+        /* case 4
+         *              |---CUR--|     or                |--CUR--|
+         *  |------NEW------|                |----NEW----|
+         */
+        if (cur->offset >= off && cur->offset < chunk_end) {
+            cur->size = cur_chunk_end - chunk_end;
+            cur->offset = chunk_end + 1;
+            before = cur;
+            break;
+        }
+        /* case 5
+         *                     |---CUR--|-CUR--|
+         *  |------NEW------|
+         */
+        if (cur->offset > chunk_end) {
+            before = cur;
+            break;
+        }
+    }
+
+    operm = g_new(MemoryRegionPermission, 1);
+    operm->offset = off;
+    operm->size = size;
+    operm->perms = perms;
+    if (QTAILQ_EMPTY(&mr->perms)) {
+        QTAILQ_INSERT_HEAD(&mr->perms, operm, entry);
+    } else if (before != NULL) {
+        QTAILQ_INSERT_BEFORE(before, operm, entry);
+    } else {
+        QTAILQ_INSERT_TAIL(&mr->perms, operm, entry);
+    }
+
+    return true;
+}
+
 UNICORN_EXPORT
 uc_err uc_mem_protect(struct uc_struct *uc, uint64_t address, size_t size, uint32_t perms)
 {
@@ -974,42 +1101,41 @@ uc_err uc_mem_protect(struct uc_struct *uc, uint64_t address, size_t size, uint3
     size_t count, len;
     bool remove_exec = false;
 
-    if (size == 0)
+    if (size == 0) {
         // trivial case, no change
         return UC_ERR_OK;
-
-    // address must be aligned to uc->target_page_size
-    if ((address & uc->target_page_align) != 0)
-        return UC_ERR_ARG;
-
-    // size must be multiple of uc->target_page_size
-    if ((size & uc->target_page_align) != 0)
-        return UC_ERR_ARG;
+    }
 
     // check for only valid permissions
-    if ((perms & ~UC_PROT_ALL) != 0)
+    if ((perms & ~UC_PROT_ALL) != 0) {
         return UC_ERR_ARG;
+    }
 
     // check that user's entire requested block is mapped
-    if (!check_mem_area(uc, address, size))
+    if (!check_mem_area(uc, address, size)) {
         return UC_ERR_NOMEM;
+    }
 
     // Now we know entire region is mapped, so change permissions
     // We may need to split regions if this area spans adjacent regions
     addr = address;
     count = 0;
     while(count < size) {
-        mr = memory_mapping(uc, addr, &phys_addr);
-        len = (size_t)MIN(size - count, mr->end - phys_addr);
-        if (!split_region(uc, mr, phys_addr, len, false))
-            return UC_ERR_NOMEM;
+        bool is_writable;
+        bool is_exec;
+        mr = memory_mapping(uc, addr, &phys_addr, NULL);
+        len = (size_t)MIN(size - count, mr->end - phys_addr + 1);
+        is_exec = memory_region_perms_is_executable(mr);
 
-        mr = memory_mapping(uc, addr, NULL);
-        // will this remove EXEC permission?
-        if (((mr->perms & UC_PROT_EXEC) != 0) && ((perms & UC_PROT_EXEC) == 0))
-            remove_exec = true;
-        mr->perms = perms;
-        uc->readonly_mem(mr, (perms & UC_PROT_WRITE) == 0);
+        if (is_exec && (perms & UC_PROT_EXEC) == 0)
+          remove_exec = true;
+
+        if (!split_perm_region(uc, mr, phys_addr, len, perms)) {
+            return UC_ERR_NOMEM;
+        }
+
+        is_writable = memory_region_perms_is_writable(mr);
+        uc->readonly_mem(mr, is_writable == false);
 
         count += len;
         addr += len;
@@ -1017,8 +1143,8 @@ uc_err uc_mem_protect(struct uc_struct *uc, uint64_t address, size_t size, uint3
 
     // if EXEC permission is removed, then quit TB and continue at the same place
     if (remove_exec) {
-        uc->quit_request = true;
-        uc_emu_stop(uc);
+          uc->quit_request = true;
+          uc_emu_stop(uc);
     }
 
     return UC_ERR_OK;
@@ -1053,16 +1179,21 @@ uc_err uc_mem_unmap(struct uc_struct *uc, uint64_t address, size_t size)
     addr = address;
     count = 0;
     while(count < size) {
-        mr = memory_mapping(uc, addr, &phys_addr);
-        len = (size_t)MIN(size - count, mr->end - phys_addr);
-        if (!split_region(uc, mr, phys_addr, len, true))
+        mr = memory_mapping(uc, addr, &phys_addr, NULL);
+        len = (size_t)MIN(size - count, mr->end - phys_addr + 1);
+        if (!split_perm_region(uc, mr, phys_addr, len, UC_PROT_UNK)) {
             return UC_ERR_NOMEM;
+        }
+        if (!split_region(uc, mr, phys_addr, len)) {
+            return UC_ERR_NOMEM;
+        }
 
         // if we can retrieve the mapping, then no splitting took place
         // so unmap here
-        mr = memory_mapping(uc, addr, NULL);
-        if (mr != NULL)
+        mr = memory_mapping(uc, addr, NULL, NULL);
+        if (mr != NULL) {
            uc->memory_unmap(uc, mr);
+        }
         count += len;
         addr += len;
     }
@@ -1082,9 +1213,12 @@ uc_err uc_mem_unmap(struct uc_struct *uc, uint64_t address, size_t size)
 
 
 // find the memory region of this address
-MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address, uint64_t* out_address)
+MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address,
+                             uint64_t* out_address, uint32_t* perms)
 {
     unsigned int i;
+    MemoryRegion *mr = NULL;
+    MemoryRegionPermission *cur;
 
     if (uc->mapped_block_count == 0)
         return NULL;
@@ -1100,19 +1234,36 @@ MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address, uint64_t* o
     // try with the cache index first
     i = uc->mapped_block_cache_index;
 
-    if (i < uc->mapped_block_count && address >= uc->mapped_blocks[i]->addr && address < uc->mapped_blocks[i]->end)
-        return uc->mapped_blocks[i];
+    if (i < uc->mapped_block_count &&
+        address >= uc->mapped_blocks[i]->addr &&
+        address <= uc->mapped_blocks[i]->end) {
+        mr = uc->mapped_blocks[i];
+    }
 
-    for(i = 0; i < uc->mapped_block_count; i++) {
-        if (address >= uc->mapped_blocks[i]->addr && address <= uc->mapped_blocks[i]->end - 1) {
-            // cache this index for the next query
-            uc->mapped_block_cache_index = i;
-            return uc->mapped_blocks[i];
+    if (mr == NULL) {
+        for(i = 0; i < uc->mapped_block_count; i++) {
+            if (address >= uc->mapped_blocks[i]->addr && address <= uc->mapped_blocks[i]->end) {
+                // cache this index for the next query
+                uc->mapped_block_cache_index = i;
+                mr = uc->mapped_blocks[i];
+                break;
+            }
         }
     }
 
-    // not found
-    return NULL;
+    if (mr != NULL && perms != NULL) {
+        uint64_t off = *out_address - mr->addr;
+        *perms = UC_PROT_NONE;
+        QTAILQ_FOREACH(cur, &mr->perms, entry) {
+            if ((cur->offset <= off) &&
+                (off < (cur->offset + cur->size))) {
+                *perms = cur->perms;
+                break;
+            }
+        }
+    }
+
+    return mr;
 }
 
 UNICORN_EXPORT
@@ -1201,7 +1352,6 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
     return ret;
 }
 
-
 UNICORN_EXPORT
 uc_err uc_hook_del(uc_engine *uc, uc_hook hh)
 {
@@ -1268,14 +1418,56 @@ uint32_t uc_mem_regions(uc_engine *uc, uc_mem_region **regions, uint32_t *count)
 
     for (i = 0; i < *count; i++) {
         r[i].begin = uc->mapped_blocks[i]->addr;
-        r[i].end = uc->mapped_blocks[i]->end - 1;
-        r[i].perms = uc->mapped_blocks[i]->perms;
+        r[i].end = uc->mapped_blocks[i]->end;
+        r[i].perms = UC_PROT_UNK;
     }
 
     *regions = r;
 
     return UC_ERR_OK;
 }
+
+UNICORN_EXPORT
+uc_err uc_mem_perm_regions(uc_engine *uc, uc_mem_region **regions, uint32_t *out_count)
+{
+    MemoryRegionPermission *cur;
+    uc_mem_region *r = NULL;
+    int i, j;
+
+    if (out_count == NULL || regions == NULL)
+      return UC_ERR_ARG;
+
+    for (i = 0; i < uc->mapped_block_count; i++) {
+        QTAILQ_FOREACH(cur, &uc->mapped_blocks[i]->perms, entry) {
+            (*out_count)++;
+        }
+    }
+
+    if (*out_count == 0) {
+      return UC_ERR_OK;
+    }
+
+    r = g_malloc0(*out_count * sizeof(uc_mem_region));
+    if (r == NULL) {
+        // out of memory
+        return UC_ERR_NOMEM;
+    }
+
+    j = 0;
+    for (i = 0; i < uc->mapped_block_count; i++) {
+        QTAILQ_FOREACH(cur, &uc->mapped_blocks[i]->perms, entry) {
+            r[j].begin = cur->offset + uc->mapped_blocks[i]->addr;
+            r[j].end = r[j].begin + cur->size - 1;
+            r[j].perms = cur->perms;
+            j++;
+        }
+    }
+
+    *regions = r;
+
+    return UC_ERR_OK;
+}
+
 
 UNICORN_EXPORT
 uc_err uc_query(uc_engine *uc, uc_query_type type, size_t *result)

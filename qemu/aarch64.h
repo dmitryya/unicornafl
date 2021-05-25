@@ -2082,6 +2082,8 @@
 #define memory_region_write_accessor memory_region_write_accessor_aarch64
 #define memory_region_wrong_endianness memory_region_wrong_endianness_aarch64
 #define memory_try_enable_merging memory_try_enable_merging_aarch64
+#define memory_region_perm_del memory_region_perm_del_aarch64
+#define memory_region_perm_del_all memory_region_perm_del_all_aarch64
 #define module_call_init module_call_init_aarch64
 #define module_load module_load_aarch64
 #define mpidr_cp_reginfo mpidr_cp_reginfo_aarch64
@@ -2377,7 +2379,6 @@
 #define qemu_get_guest_simple_memory_mapping qemu_get_guest_simple_memory_mapping_aarch64
 #define qemu_get_ram_block qemu_get_ram_block_aarch64
 #define qemu_get_ram_block_host_ptr qemu_get_ram_block_host_ptr_aarch64
-#define qemu_get_ram_fd qemu_get_ram_fd_aarch64
 #define qemu_get_ram_ptr qemu_get_ram_ptr_aarch64
 #define qemu_host_page_mask qemu_host_page_mask_aarch64
 #define qemu_host_page_size qemu_host_page_size_aarch64

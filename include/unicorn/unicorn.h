@@ -751,6 +751,7 @@ typedef enum uc_prot {
    UC_PROT_WRITE = 2,
    UC_PROT_EXEC = 4,
    UC_PROT_ALL = 7,
+   UC_PROT_UNK = -1,
 } uc_prot;
 
 /*
@@ -816,9 +817,7 @@ uc_err uc_mem_unmap(uc_engine *uc, uint64_t address, size_t size);
 
  @uc: handle returned by uc_open()
  @address: starting address of the memory region to be modified.
-    This address must be aligned to 4KB, or this will return with UC_ERR_ARG error.
  @size: size of the memory region to be modified.
-    This size must be a multiple of 4KB, or this will return with UC_ERR_ARG error.
  @perms: New permissions for the mapped region.
     This must be some combination of UC_PROT_READ | UC_PROT_WRITE | UC_PROT_EXEC,
     or this will return with UC_ERR_ARG error.
@@ -845,6 +844,24 @@ uc_err uc_mem_protect(uc_engine *uc, uint64_t address, size_t size, uint32_t per
 */
 UNICORN_EXPORT
 uc_err uc_mem_regions(uc_engine *uc, uc_mem_region **regions, uint32_t *count);
+
+/*
+ Retrieve all permission regions for specifid memory regions mapped by uc_mem_map()
+ and uc_mem_map_ptr().
+ This API allocates memory for @regions, and user must free this memory later
+ by uc_free() to avoid leaking memory.
+ NOTE: memory regions may be split by uc_mem_unmap()
+
+ @uc: handle returned by uc_open()
+ @regions: pointer to an array of uc_mem_region struct. This is allocated by
+   Unicorn, and must be freed by user later with uc_free()
+ @out_count: pointer to number of struct uc_mem_region contained in @regions
+
+ @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
+   for detailed error).
+*/
+UNICORN_EXPORT
+uc_err uc_mem_perm_regions(uc_engine *uc, uc_mem_region **regions, uint32_t *out_count);
 
 /*
  Allocate a region that can be used with uc_context_{save,restore} to perform

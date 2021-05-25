@@ -1,6 +1,7 @@
 /* Autogen header for Unicorn Engine - DONOT MODIFY */
 #ifndef UNICORN_AUTOGEN_PPC64_H
 #define UNICORN_AUTOGEN_PPC64_H
+#define afl_forkserver_start afl_forkserver_start_ppc64
 #define arm_release arm_release_ppc64
 #define aarch64_tb_set_jmp_target aarch64_tb_set_jmp_target_ppc64
 #define ppc_tb_set_jmp_target ppc_tb_set_jmp_target_ppc64
@@ -99,6 +100,7 @@
 #define arm_cpu_exec_interrupt arm_cpu_exec_interrupt_ppc64
 #define arm_cpu_finalizefn arm_cpu_finalizefn_ppc64
 #define arm_cpu_get_phys_page_debug arm_cpu_get_phys_page_debug_ppc64
+#define arm_get_phys_addr arm_get_phys_addr_ppc64
 #define arm_cpu_handle_mmu_fault arm_cpu_handle_mmu_fault_ppc64
 #define arm_cpu_initfn arm_cpu_initfn_ppc64
 #define arm_cpu_list arm_cpu_list_ppc64
@@ -656,6 +658,8 @@
 #define gen_helper_double_saturate gen_helper_double_saturate_ppc64
 #define gen_helper_exception_internal gen_helper_exception_internal_ppc64
 #define gen_helper_exception_with_syndrome gen_helper_exception_with_syndrome_ppc64
+#define gen_helper_float64_to_float32 gen_helper_float64_to_float32_ppc64
+#define gen_helper_float32_to_float64 gen_helper_float32_to_float64_ppc64
 #define gen_helper_get_cp_reg gen_helper_get_cp_reg_ppc64
 #define gen_helper_get_cp_reg64 gen_helper_get_cp_reg64_ppc64
 #define gen_helper_get_r13_banked gen_helper_get_r13_banked_ppc64
@@ -1376,6 +1380,8 @@
 #define helper_exception_internal helper_exception_internal_ppc64
 #define helper_exception_return helper_exception_return_ppc64
 #define helper_exception_with_syndrome helper_exception_with_syndrome_ppc64
+#define helper_float32_to_float64 helper_float32_to_float64_ppc64
+#define helper_float64_to_float32 helper_float64_to_float32_ppc64
 #define helper_get_cp_reg helper_get_cp_reg_ppc64
 #define helper_get_cp_reg64 helper_get_cp_reg64_ppc64
 #define helper_get_r13_banked helper_get_r13_banked_ppc64
@@ -2076,6 +2082,8 @@
 #define memory_region_write_accessor memory_region_write_accessor_ppc64
 #define memory_region_wrong_endianness memory_region_wrong_endianness_ppc64
 #define memory_try_enable_merging memory_try_enable_merging_ppc64
+#define memory_region_perm_del memory_region_perm_del_ppc64
+#define memory_region_perm_del_all memory_region_perm_del_all_ppc64
 #define module_call_init module_call_init_ppc64
 #define module_load module_load_ppc64
 #define mpidr_cp_reginfo mpidr_cp_reginfo_ppc64
@@ -2114,7 +2122,6 @@
 #define object_child_foreach object_child_foreach_ppc64
 #define object_class_foreach object_class_foreach_ppc64
 #define object_class_foreach_tramp object_class_foreach_tramp_ppc64
-#define object_class_get_list object_class_get_list_ppc64
 #define object_class_get_list_tramp object_class_get_list_tramp_ppc64
 #define object_class_get_parent object_class_get_parent_ppc64
 #define object_deinit object_deinit_ppc64
@@ -2372,7 +2379,6 @@
 #define qemu_get_guest_simple_memory_mapping qemu_get_guest_simple_memory_mapping_ppc64
 #define qemu_get_ram_block qemu_get_ram_block_ppc64
 #define qemu_get_ram_block_host_ptr qemu_get_ram_block_host_ptr_ppc64
-#define qemu_get_ram_fd qemu_get_ram_fd_ppc64
 #define qemu_get_ram_ptr qemu_get_ram_ptr_ppc64
 #define qemu_host_page_mask qemu_host_page_mask_ppc64
 #define qemu_host_page_size qemu_host_page_size_ppc64
@@ -3017,4 +3023,6 @@
 #define xpsr_write xpsr_write_ppc64
 #define xscale_cpar_write xscale_cpar_write_ppc64
 #define xscale_cp_reginfo xscale_cp_reginfo_ppc64
+#define helper_fsqrt helper_fsqrt_ppc64
+#define helper_divs helper_divs_ppc64
 #endif

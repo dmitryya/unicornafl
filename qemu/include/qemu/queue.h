@@ -341,6 +341,16 @@ struct {                                                                \
         (head)->tqh_last = &(head)->tqh_first;                          \
 } while (/*CONSTCOND*/0)
 
+#define QTAILQ_MOVE(dst_head, src_head, field) do {                            \
+        (dst_head)->tqh_first = (src_head)->tqh_first;                  \
+        (dst_head)->tqh_last = (src_head)->tqh_last;                    \
+        (src_head)->tqh_first = NULL;                                   \
+        (src_head)->tqh_last = &(src_head)->tqh_first;                  \
+        if ((dst_head)->tqh_first != NULL)                            \
+          (dst_head)->tqh_first->field.tqe_prev = &(dst_head)->tqh_first;                     \
+} while (/*CONSTCOND*/0)
+
+
 #define QTAILQ_INSERT_HEAD(head, elm, field) do {                       \
         if (((elm)->field.tqe_next = (head)->tqh_first) != NULL)        \
                 (head)->tqh_first->field.tqe_prev =                     \

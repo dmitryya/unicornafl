@@ -2082,6 +2082,8 @@
 #define memory_region_write_accessor memory_region_write_accessor_arm
 #define memory_region_wrong_endianness memory_region_wrong_endianness_arm
 #define memory_try_enable_merging memory_try_enable_merging_arm
+#define memory_region_perm_del memory_region_perm_del_arm
+#define memory_region_perm_del_all memory_region_perm_del_all_arm
 #define module_call_init module_call_init_arm
 #define module_load module_load_arm
 #define mpidr_cp_reginfo mpidr_cp_reginfo_arm
@@ -2377,7 +2379,6 @@
 #define qemu_get_guest_simple_memory_mapping qemu_get_guest_simple_memory_mapping_arm
 #define qemu_get_ram_block qemu_get_ram_block_arm
 #define qemu_get_ram_block_host_ptr qemu_get_ram_block_host_ptr_arm
-#define qemu_get_ram_fd qemu_get_ram_fd_arm
 #define qemu_get_ram_ptr qemu_get_ram_ptr_arm
 #define qemu_host_page_mask qemu_host_page_mask_arm
 #define qemu_host_page_size qemu_host_page_size_arm

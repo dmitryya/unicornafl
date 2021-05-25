@@ -83,6 +83,14 @@ struct MemoryRegionOps {
     } impl;
 };
 
+typedef struct MemoryRegionPermission{
+  uint64_t offset; /* offset of the overlay within the MemoryRegion */
+  uint64_t size; /* size of the overlay */
+  uint32_t perms;
+
+  QTAILQ_ENTRY(MemoryRegionPermission) entry;
+} MemoryRegionPermission;
+
 struct MemoryRegion {
     /* All fields are private - violators will be prosecuted */
     const MemoryRegionOps *ops;
@@ -103,7 +111,7 @@ struct MemoryRegion {
     QTAILQ_HEAD(subregions, MemoryRegion) subregions;
     QTAILQ_ENTRY(MemoryRegion) subregions_link;
     struct uc_struct *uc;
-    uint32_t perms;   //all perms, partially redundant with readonly
+    QTAILQ_HEAD(perms, MemoryRegionPermission) perms;
     uint64_t end;
 };
 
@@ -302,6 +310,9 @@ uint64_t memory_region_get_alignment(const MemoryRegion *mr);
 void memory_region_del_subregion(MemoryRegion *mr,
                                  MemoryRegion *subregion);
 
+void memory_region_perm_del(MemoryRegion *mr,
+                            MemoryRegionPermission *perm);
+void memory_region_perm_del_all(MemoryRegion *mr);
 /**
  * memory_region_is_mapped: returns true if #MemoryRegion is mapped
  * into any address space.

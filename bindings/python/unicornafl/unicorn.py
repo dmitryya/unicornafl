@@ -179,6 +179,7 @@ _setup_prototype(_uc, "uc_context_restore", ucerr, uc_engine, uc_context)
 _setup_prototype(_uc, "uc_context_size", ctypes.c_size_t, uc_engine)
 _setup_prototype(_uc, "uc_context_free", ucerr, uc_context)
 _setup_prototype(_uc, "uc_mem_regions", ucerr, uc_engine, ctypes.POINTER(ctypes.POINTER(_uc_mem_region)), ctypes.POINTER(ctypes.c_uint32))
+_setup_prototype(_uc, "uc_mem_perm_regions", ucerr, uc_engine, ctypes.POINTER(ctypes.POINTER(_uc_mem_region)), ctypes.POINTER(ctypes.c_uint32))
 _setup_prototype(_uc, "uc_afl_forkserver_start", ucaflret, uc_engine, ctypes.POINTER(ctypes.c_uint64), ctypes.c_size_t)
 _setup_prototype(_uc, "uc_afl_fuzz", ucaflret,
         uc_engine, # unicorn engine
@@ -894,6 +895,19 @@ class Uc(object):
         regions = ctypes.POINTER(_uc_mem_region)()
         count = ctypes.c_uint32()
         status = _uc.uc_mem_regions(self._uch, ctypes.byref(regions), ctypes.byref(count))
+        if status != uc.UC_ERR_OK:
+            raise UcError(status)
+
+        try:
+            for i in range(count.value):
+                yield (regions[i].begin, regions[i].end, regions[i].perms)
+        finally:
+            _uc.uc_free(regions)
+
+    def mem_perm_regions(self):
+        regions = ctypes.POINTER(_uc_mem_region)()
+        count = ctypes.c_uint32()
+        status = _uc.uc_mem_perm_regions(self._uch, ctypes.byref(regions), ctypes.byref(count))
         if status != uc.UC_ERR_OK:
             raise UcError(status)
 

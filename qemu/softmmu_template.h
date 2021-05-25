@@ -188,6 +188,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     target_ulong tlb_addr = env->tlb_table[mmu_idx][index].ADDR_READ;
     uintptr_t haddr;
     uint64_t phys_addr;
+    uint32_t perms;
     DATA_TYPE res;
     int error_code;
     struct hook *hook;
@@ -195,7 +196,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     HOOK_FOREACH_VAR_DECLARE;
 
     struct uc_struct *uc = env->uc;
-    MemoryRegion *mr = memory_mapping(uc, addr, &phys_addr);
+    MemoryRegion *mr = memory_mapping(uc, addr, &phys_addr, &perms);
 
     // memory might be still unmapped while reading or fetching
     if (mr == NULL) {
@@ -223,7 +224,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
 #endif
         if (handled) {
             env->invalid_error = UC_ERR_OK;
-            mr = memory_mapping(uc, addr, &phys_addr);
+            mr = memory_mapping(uc, addr, &phys_addr, &perms);
         }
 
         if (mr == NULL) {
@@ -237,7 +238,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
 
 #if defined(SOFTMMU_CODE_ACCESS)
     // Unicorn: callback on fetch from NX
-    if (mr != NULL && !(mr->perms & UC_PROT_EXEC)) {  // non-executable
+    if (mr != NULL && !(perms & UC_PROT_EXEC)) {  // non-executable
         handled = false;
         HOOK_FOREACH(uc, hook, UC_HOOK_MEM_FETCH_PROT) {
             if (hook->to_delete)
@@ -278,7 +279,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     }
 
     // Unicorn: callback on non-readable memory
-    if (READ_ACCESS_TYPE == MMU_DATA_LOAD && mr != NULL && !(mr->perms & UC_PROT_READ)) {  //non-readable
+    if (READ_ACCESS_TYPE == MMU_DATA_LOAD && mr != NULL && !(perms & UC_PROT_READ)) {  //non-readable
         handled = false;
         HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ_PROT) {
             if (hook->to_delete)
@@ -441,6 +442,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     target_ulong tlb_addr = env->tlb_table[mmu_idx][index].ADDR_READ;
     uintptr_t haddr;
     uint64_t phys_addr;
+    uint32_t perms;
     DATA_TYPE res;
     int error_code;
     struct hook *hook;
@@ -448,7 +450,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     HOOK_FOREACH_VAR_DECLARE;
 
     struct uc_struct *uc = env->uc;
-    MemoryRegion *mr = memory_mapping(uc, addr, &phys_addr);
+    MemoryRegion *mr = memory_mapping(uc, addr, &phys_addr, &perms);
 
     // memory can be unmapped while reading or fetching
     if (mr == NULL) {
@@ -476,7 +478,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
 #endif
         if (handled) {
             env->invalid_error = UC_ERR_OK;
-            mr = memory_mapping(uc, addr, &phys_addr);
+            mr = memory_mapping(uc, addr, &phys_addr, &perms);
         }
 
         if (mr == NULL) {
@@ -490,7 +492,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
 
 #if defined(SOFTMMU_CODE_ACCESS)
     // Unicorn: callback on fetch from NX
-    if (mr != NULL && !(mr->perms & UC_PROT_EXEC)) {  // non-executable
+    if (mr != NULL && !(perms & UC_PROT_EXEC)) {  // non-executable
         handled = false;
         HOOK_FOREACH(uc, hook, UC_HOOK_MEM_FETCH_PROT) {
             if (hook->to_delete)
@@ -531,7 +533,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     }
 
     // Unicorn: callback on non-readable memory
-    if (READ_ACCESS_TYPE == MMU_DATA_LOAD && mr != NULL && !(mr->perms & UC_PROT_READ)) {  //non-readable
+    if (READ_ACCESS_TYPE == MMU_DATA_LOAD && mr != NULL && !(perms & UC_PROT_READ)) {  //non-readable
         handled = false;
         HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ_PROT) {
             if (hook->to_delete)
@@ -733,12 +735,13 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     target_ulong tlb_addr = env->tlb_table[mmu_idx][index].addr_write;
     uintptr_t haddr;
     uint64_t phys_addr;
+    uint32_t perms;
     struct hook *hook;
     bool handled;
     HOOK_FOREACH_VAR_DECLARE;
 
     struct uc_struct *uc = env->uc;
-    MemoryRegion *mr = memory_mapping(uc, addr, &phys_addr);
+    MemoryRegion *mr = memory_mapping(uc, addr, &phys_addr, &perms);
 
     // Unicorn: callback on invalid memory
     if (mr == NULL) {
@@ -761,7 +764,7 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
             return;
         } else {
             env->invalid_error = UC_ERR_OK;
-            mr = memory_mapping(uc, addr, &phys_addr);
+            mr = memory_mapping(uc, addr, &phys_addr, &perms);
         }
 
         if (mr == NULL) {
@@ -774,7 +777,7 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     }
 
     // Unicorn: callback on non-writable memory
-    if (mr != NULL && !(mr->perms & UC_PROT_WRITE)) {  //non-writable
+    if (mr != NULL && !(perms & UC_PROT_WRITE)) {  //non-writable
         handled = false;
         HOOK_FOREACH(uc, hook, UC_HOOK_MEM_WRITE_PROT) {
             if (hook->to_delete)
@@ -912,12 +915,13 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     target_ulong tlb_addr = env->tlb_table[mmu_idx][index].addr_write;
     uintptr_t haddr;
     uint64_t phys_addr;
+    uint32_t perms;
     struct hook *hook;
     bool handled;
     HOOK_FOREACH_VAR_DECLARE;
 
     struct uc_struct *uc = env->uc;
-    MemoryRegion *mr = memory_mapping(uc, addr, &phys_addr);
+    MemoryRegion *mr = memory_mapping(uc, addr, &phys_addr, &perms);
 
     // Unicorn: callback on invalid memory
     if (mr == NULL) {
@@ -940,7 +944,7 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
             return;
         } else {
             env->invalid_error = UC_ERR_OK;
-            mr = memory_mapping(uc, addr, &phys_addr);
+            mr = memory_mapping(uc, addr, &phys_addr, &perms);
         }
 
         if (mr == NULL) {
@@ -953,7 +957,7 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     }
 
     // Unicorn: callback on non-writable memory
-    if (mr != NULL && !(mr->perms & UC_PROT_WRITE)) {  //non-writable
+    if (mr != NULL && !(perms & UC_PROT_WRITE)) {  //non-writable
         handled = false;
         HOOK_FOREACH(uc, hook, UC_HOOK_MEM_WRITE_PROT) {
             if (hook->to_delete)
