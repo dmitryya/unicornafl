@@ -266,7 +266,7 @@ struct uc_context {
 };
 
 // check if this address is mapped in (via uc_mem_map())
-MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address, uint64_t* out_address);
+MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address, uint64_t* out_address, uint32_t* perms);
 
 #endif
 /* vim: set ts=4 noet:  */

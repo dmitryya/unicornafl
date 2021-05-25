@@ -100,6 +100,7 @@
 #define arm_cpu_exec_interrupt arm_cpu_exec_interrupt_mipsel
 #define arm_cpu_finalizefn arm_cpu_finalizefn_mipsel
 #define arm_cpu_get_phys_page_debug arm_cpu_get_phys_page_debug_mipsel
+#define arm_get_phys_addr arm_get_phys_addr_mipsel
 #define arm_cpu_handle_mmu_fault arm_cpu_handle_mmu_fault_mipsel
 #define arm_cpu_initfn arm_cpu_initfn_mipsel
 #define arm_cpu_list arm_cpu_list_mipsel
@@ -2081,6 +2082,8 @@
 #define memory_region_write_accessor memory_region_write_accessor_mipsel
 #define memory_region_wrong_endianness memory_region_wrong_endianness_mipsel
 #define memory_try_enable_merging memory_try_enable_merging_mipsel
+#define memory_region_perm_del memory_region_perm_del_mipsel
+#define memory_region_perm_del_all memory_region_perm_del_all_mipsel
 #define module_call_init module_call_init_mipsel
 #define module_load module_load_mipsel
 #define mpidr_cp_reginfo mpidr_cp_reginfo_mipsel
@@ -2376,7 +2379,6 @@
 #define qemu_get_guest_simple_memory_mapping qemu_get_guest_simple_memory_mapping_mipsel
 #define qemu_get_ram_block qemu_get_ram_block_mipsel
 #define qemu_get_ram_block_host_ptr qemu_get_ram_block_host_ptr_mipsel
-#define qemu_get_ram_fd qemu_get_ram_fd_mipsel
 #define qemu_get_ram_ptr qemu_get_ram_ptr_mipsel
 #define qemu_host_page_mask qemu_host_page_mask_mipsel
 #define qemu_host_page_size qemu_host_page_size_mipsel

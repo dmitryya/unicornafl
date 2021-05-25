@@ -50,12 +50,18 @@ const MemoryRegionOps unassigned_mem_ops = {
 MemoryRegion *memory_map(struct uc_struct *uc, hwaddr begin, size_t size, uint32_t perms)
 {
     MemoryRegion *ram = g_new(MemoryRegion, 1);
+    MemoryRegionPermission *operm;
 
     memory_region_init_ram(uc, ram, size, perms);
     if (ram->ram_addr == -1)
         // out of memory
         return NULL;
 
+    operm = g_new(MemoryRegionPermission, 1);
+    operm->offset = 0;
+    operm->size = size;
+    operm->perms = perms;
+    QTAILQ_INSERT_HEAD(&ram->perms, operm, entry);
     memory_region_add_subregion(get_system_memory(uc), begin, ram);
 
     if (uc->cpu)
@@ -67,13 +73,18 @@ MemoryRegion *memory_map(struct uc_struct *uc, hwaddr begin, size_t size, uint32
 MemoryRegion *memory_map_ptr(struct uc_struct *uc, hwaddr begin, size_t size, uint32_t perms, void *ptr)
 {
     MemoryRegion *ram = g_new(MemoryRegion, 1);
+    MemoryRegionPermission *operm;
 
     memory_region_init_ram_ptr(uc, ram, size, ptr);
-    ram->perms = perms;
     if (ram->ram_addr == -1)
         // out of memory
         return NULL;
 
+    operm = g_new(MemoryRegionPermission, 1);
+    operm->offset = 0;
+    operm->size = size;
+    operm->perms = perms;
+    QTAILQ_INSERT_HEAD(&ram->perms, operm, entry);
     memory_region_add_subregion(get_system_memory(uc), begin, ram);
 
     if (uc->cpu)
@@ -97,6 +108,7 @@ void memory_unmap(struct uc_struct *uc, MemoryRegion *mr)
         }
     }
     memory_region_del_subregion(get_system_memory(uc), mr);
+    memory_region_perm_del_all(mr);
 
     for (i = 0; i < uc->mapped_block_count; i++) {
         if (uc->mapped_blocks[i] == mr) {
@@ -117,11 +129,13 @@ int memory_free(struct uc_struct *uc)
 
     for (i = 0; i < uc->mapped_block_count; i++) {
         mr = uc->mapped_blocks[i];
+        memory_region_perm_del_all(mr);
         mr->enabled = false;
         memory_region_del_subregion(get_system_memory(uc), mr);
         mr->destructor(mr);
         g_free(mr);
     }
+    uc->mapped_block_count = 0;
 
     return 0;
 }
@@ -700,6 +714,7 @@ void memory_region_init(struct uc_struct *uc, MemoryRegion *mr,
     mr->enabled = true;
     mr->destructor = memory_region_destructor_none;
     QTAILQ_INIT(&mr->subregions);
+    QTAILQ_INIT(&mr->perms);
 
     mr->uc = uc;
     mr->size = int128_make64(size);
@@ -846,7 +861,6 @@ void memory_region_init_ram(struct uc_struct *uc, MemoryRegion *mr,
     if (!(perms & UC_PROT_WRITE)) {
         mr->readonly = true;
     }
-    mr->perms = perms;
     mr->terminates = true;
     mr->destructor = memory_region_destructor_ram;
     mr->ram_addr = qemu_ram_alloc(size, mr);
@@ -876,12 +890,6 @@ void memory_region_set_readonly(MemoryRegion *mr, bool readonly)
     if (mr->readonly != readonly) {
         memory_region_transaction_begin(mr->uc);
         mr->readonly = readonly;
-        if (readonly) {
-            mr->perms &= ~UC_PROT_WRITE;
-        }
-        else {
-            mr->perms |= UC_PROT_WRITE;
-        }
         memory_region_transaction_commit(mr->uc);
     }
 }
@@ -950,6 +958,24 @@ void memory_region_del_subregion(MemoryRegion *mr,
     subregion->container = NULL;
     QTAILQ_REMOVE(&mr->subregions, subregion, subregions_link);
     memory_region_transaction_commit(mr->uc);
+}
+
+void memory_region_perm_del(MemoryRegion *mr,
+                            MemoryRegionPermission *perm)
+{
+    if (!QTAILQ_EMPTY(&mr->perms) && perm != NULL) {
+      QTAILQ_REMOVE(&mr->perms, perm, entry);
+      g_free(perm);
+    }
+}
+
+void memory_region_perm_del_all(MemoryRegion *mr)
+{
+    MemoryRegionPermission *cur, *next;
+
+    QTAILQ_FOREACH_SAFE(cur, &mr->perms, entry, next) {
+        memory_region_perm_del(mr, cur);
+    }
 }
 
 ram_addr_t memory_region_get_ram_addr(MemoryRegion *mr)

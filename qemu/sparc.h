@@ -100,6 +100,7 @@
 #define arm_cpu_exec_interrupt arm_cpu_exec_interrupt_sparc
 #define arm_cpu_finalizefn arm_cpu_finalizefn_sparc
 #define arm_cpu_get_phys_page_debug arm_cpu_get_phys_page_debug_sparc
+#define arm_get_phys_addr arm_get_phys_addr_sparc
 #define arm_cpu_handle_mmu_fault arm_cpu_handle_mmu_fault_sparc
 #define arm_cpu_initfn arm_cpu_initfn_sparc
 #define arm_cpu_list arm_cpu_list_sparc
@@ -2081,6 +2082,8 @@
 #define memory_region_write_accessor memory_region_write_accessor_sparc
 #define memory_region_wrong_endianness memory_region_wrong_endianness_sparc
 #define memory_try_enable_merging memory_try_enable_merging_sparc
+#define memory_region_perm_del memory_region_perm_del_sparc
+#define memory_region_perm_del_all memory_region_perm_del_all_sparc
 #define module_call_init module_call_init_sparc
 #define module_load module_load_sparc
 #define mpidr_cp_reginfo mpidr_cp_reginfo_sparc
@@ -2376,7 +2379,6 @@
 #define qemu_get_guest_simple_memory_mapping qemu_get_guest_simple_memory_mapping_sparc
 #define qemu_get_ram_block qemu_get_ram_block_sparc
 #define qemu_get_ram_block_host_ptr qemu_get_ram_block_host_ptr_sparc
-#define qemu_get_ram_fd qemu_get_ram_fd_sparc
 #define qemu_get_ram_ptr qemu_get_ram_ptr_sparc
 #define qemu_host_page_mask qemu_host_page_mask_sparc
 #define qemu_host_page_size qemu_host_page_size_sparc
