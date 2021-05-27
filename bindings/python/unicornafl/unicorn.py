@@ -161,7 +161,9 @@ _setup_prototype(_uc, "uc_close", ucerr, uc_engine)
 _setup_prototype(_uc, "uc_strerror", ctypes.c_char_p, ucerr)
 _setup_prototype(_uc, "uc_errno", ucerr, uc_engine)
 _setup_prototype(_uc, "uc_reg_read", ucerr, uc_engine, ctypes.c_int, ctypes.c_void_p)
+_setup_prototype(_uc, "uc_reg_read_batch", ucerr, uc_engine, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)), ctypes.c_int)
 _setup_prototype(_uc, "uc_reg_write", ucerr, uc_engine, ctypes.c_int, ctypes.c_void_p)
+_setup_prototype(_uc, "uc_reg_write_batch", ucerr, uc_engine, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)), ctypes.c_int)
 _setup_prototype(_uc, "uc_mem_read", ucerr, uc_engine, ctypes.c_uint64, ctypes.POINTER(ctypes.c_char), ctypes.c_size_t)
 _setup_prototype(_uc, "uc_mem_write", ucerr, uc_engine, ctypes.c_uint64, ctypes.POINTER(ctypes.c_char), ctypes.c_size_t)
 _setup_prototype(_uc, "uc_emu_start", ucerr, uc_engine, ctypes.c_uint64, ctypes.c_uint64, ctypes.c_uint64, ctypes.c_size_t)
@@ -599,62 +601,60 @@ class Uc(object):
             # Error creating forkserver :(
             raise UcAflError(status)
 
-    # return the value of a register
-    def reg_read(self, reg_id, opt=None):
+    def _reg_read_type(self, reg_id, opt):
         if self._arch == uc.UC_ARCH_X86:
             if reg_id in [x86_const.UC_X86_REG_IDTR, x86_const.UC_X86_REG_GDTR, x86_const.UC_X86_REG_LDTR, x86_const.UC_X86_REG_TR]:
                 reg = uc_x86_mmr()
-                status = _uc.uc_reg_read(self._uch, reg_id, ctypes.byref(reg))
-                if status != uc.UC_ERR_OK:
-                    raise UcError(status)
-                return reg.selector, reg.base, reg.limit, reg.flags
+                return reg, lambda: (reg.selector, reg.base, reg.limit, reg.flags)
             if reg_id in range(x86_const.UC_X86_REG_FP0, x86_const.UC_X86_REG_FP0+8):
                 reg = uc_x86_float80()
-                status = _uc.uc_reg_read(self._uch, reg_id, ctypes.byref(reg))
-                if status != uc.UC_ERR_OK:
-                    raise UcError(status)
-                return reg.mantissa, reg.exponent
+                return reg, lambda: (reg.mantissa, reg.exponent)
             if reg_id in range(x86_const.UC_X86_REG_XMM0, x86_const.UC_X86_REG_XMM0+8):
                 reg = uc_x86_xmm()
-                status = _uc.uc_reg_read(self._uch, reg_id, ctypes.byref(reg))
-                if status != uc.UC_ERR_OK:
-                    raise UcError(status)
-                return reg.low_qword | (reg.high_qword << 64)
+                return reg, lambda: reg.low_qword | (reg.high_qword << 64)
             if reg_id in range(x86_const.UC_X86_REG_YMM0, x86_const.UC_X86_REG_YMM0+16):
                 reg = uc_x86_ymm()
-                status = _uc.uc_reg_read(self._uch, reg_id, ctypes.byref(reg))
-                if status != uc.UC_ERR_OK:
-                    raise UcError(status)
-                return reg.first_qword | (reg.second_qword << 64) | (reg.third_qword << 128) | (reg.fourth_qword << 192)
+                return reg, lambda: reg.first_qword | (reg.second_qword << 64) | (reg.third_qword << 128) | (reg.fourth_qword << 192)
             if reg_id is x86_const.UC_X86_REG_MSR:
                 if opt is None:
                     raise UcError(uc.UC_ERR_ARG)
                 reg = uc_x86_msr()
                 reg.rid = opt
-                status = _uc.uc_reg_read(self._uch, reg_id, ctypes.byref(reg))
-                if status != uc.UC_ERR_OK:
-                    raise UcError(status)
-                return reg.value
+                return reg, lambda: reg.value
 
         if self._arch == uc.UC_ARCH_ARM64:
             if reg_id in range(arm64_const.UC_ARM64_REG_Q0, arm64_const.UC_ARM64_REG_Q31+1) or range(arm64_const.UC_ARM64_REG_V0, arm64_const.UC_ARM64_REG_V31+1):
                 reg = uc_arm64_neon128()
-                status = _uc.uc_reg_read(self._uch, reg_id, ctypes.byref(reg))
-                if status != uc.UC_ERR_OK:
-                    raise UcError(status)
-                return reg.low_qword | (reg.high_qword << 64)
+                return reg, lambda: reg.low_qword | (reg.high_qword << 64)
 
         # read to 64bit number to be safe
         reg = ctypes.c_uint64(0)
+        return reg, lambda: reg.value
+
+    # return the value of a register
+    def reg_read(self, reg_id, opt=None):
+        reg, func = self._reg_read_type(reg_id, opt)
         status = _uc.uc_reg_read(self._uch, reg_id, ctypes.byref(reg))
         if status != uc.UC_ERR_OK:
             raise UcError(status)
-        return reg.value
+        return func()
 
-    # write to a register
-    def reg_write(self, reg_id, value):
+    def reg_read_batch(self, reg_ids):
+        regs_conv = []
+        regs = []
+        for reg_id in reg_ids:
+            reg, func = self._reg_read_type(reg_id, None)
+            regs_conv.append(func)
+            regs.append(ctypes.cast(ctypes.pointer(reg), ctypes.POINTER(ctypes.c_void_p)))
+        ids = (ctypes.c_int * len(reg_ids))(*reg_ids)
+        regs_buf = (ctypes.POINTER(ctypes.c_void_p) * len(reg_ids))(*regs)
+        status = _uc.uc_reg_read_batch(self._uch, ids, regs_buf, len(reg_ids))
+        if status != uc.UC_ERR_OK:
+            raise UcError(status)
+        return [func() for func in regs_conv]
+
+    def _reg_write_conv(self, reg_id, value):
         reg = None
-
         if self._arch == uc.UC_ARCH_X86:
             if reg_id in [x86_const.UC_X86_REG_IDTR, x86_const.UC_X86_REG_GDTR, x86_const.UC_X86_REG_LDTR, x86_const.UC_X86_REG_TR]:
                 assert isinstance(value, tuple) and len(value) == 4
@@ -691,8 +691,24 @@ class Uc(object):
         if reg is None:
             # convert to 64bit number to be safe
             reg = ctypes.c_uint64(value)
+        return reg
 
+
+    # write to a register
+    def reg_write(self, reg_id, value):
+        reg = self._reg_write_conv(reg_id, value)
         status = _uc.uc_reg_write(self._uch, reg_id, ctypes.byref(reg))
+        if status != uc.UC_ERR_OK:
+            raise UcError(status)
+
+    def reg_write_batch(self, reg_ids, values):
+        regs = []
+        for i in range(len(reg_ids)):
+            reg = self._reg_write_conv(reg_ids[i], values[i])
+            regs.append(ctypes.cast(ctypes.pointer(reg), ctypes.POINTER(ctypes.c_void_p)))
+        ids = (ctypes.c_int * len(reg_ids))(*reg_ids)
+        regs_buf = (ctypes.POINTER(ctypes.c_void_p) * len(reg_ids))(*regs)
+        status = _uc.uc_reg_write_batch(self._uch, ids, regs_buf, len(reg_ids))
         if status != uc.UC_ERR_OK:
             raise UcError(status)
 
