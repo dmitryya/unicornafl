@@ -217,8 +217,8 @@ pub enum RegisterARM64 {
     X13 = 212,
     X14 = 213,
     X15 = 214,
-    IP1 = 215,
-    IP0 = 216,
+    IP0 = 215,
+    IP1 = 216,
     X18 = 217,
     X19 = 218,
     X20 = 219,
@@ -262,6 +262,53 @@ pub enum RegisterARM64 {
     V29 = 257,
     V30 = 258,
     V31 = 259,
+
+    CpacrEL1 = 261,
+
+    // thread registers
+    TpidrEL0 = 262,
+    TpidrroEL0 = 263,
+    TpidrEL1 = 264,
+    PSTATE = 265,
+
+    // exception link registers
+    ElrEL0 = 266,
+    ElrEL1 = 267,
+    ElrEL2 = 268,
+    ElrEL3 = 269,
+
+    // stack pointers registers
+    SpEL0 = 270,
+    SpEL1 = 271,
+    SpEL2 = 272,
+    SpEL3 = 273,
+
+    // other CP15 registers
+    Ttbr0EL1 = 274,
+    Ttbr1EL1 = 275,
+    EsrEL0 = 276,
+    EsrEL1 = 277,
+    EsrEL2 = 278,
+    EsrEL3 = 279,
+    FarEL0 = 280,
+    FarEL1 = 281,
+    FarEL2 = 282,
+    FarEL3 = 283,
+    ParEL1 = 284,
+    MairEL1 = 285,
+    VbarEL0 = 286,
+    VbarEL1 = 287,
+    VbarEL2 = 288,
+    VbarEL3 = 289,
+
+    ScrEL3 = 290,
+
+    SpsrEL1 = 291,
+    SpsrEL2 = 292,
+    SpsrEL3 = 293,
+
+    SCTLR = 294,
+    ENDING = 295,
 
     // pseudo registers
     PC = 260,
