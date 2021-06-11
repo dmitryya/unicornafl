@@ -25,7 +25,7 @@ opt-level = 3
 [dependencies]
 bitflags = "1.0"
 libc = "0.2"
-capstone="0.6.0"
+capstone="0.8.0"
 
 [build-dependencies]
 build-helper = "0.1"

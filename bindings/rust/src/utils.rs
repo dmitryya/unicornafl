@@ -10,7 +10,6 @@ use super::mips::RegisterMIPS;
 use super::m68k::RegisterM68K;
 use super::{Permission, Mode, Arch, HookType, MemType, uc_error};
 use std::ptr;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use libc::{mmap, c_void, size_t, MAP_ANON, MAP_PRIVATE,PROT_READ,PROT_WRITE};
 
@@ -49,7 +48,7 @@ pub fn add_debug_prints_ARM<D>(uc: &mut super::UnicornHandle<D>, code_start: u64
         .detail(true)
         .build().expect("failed to create capstone for thumb");
 
-    let callback = Box::new(move |uc: super::UnicornHandle<D>, addr: u64, size: u32| {        
+    let callback = Box::new(move |uc: super::UnicornHandle<D>, addr: u64, size: u32, _paddr: u64| {
         let sp = uc.reg_read(RegisterARM::SP as i32).expect("failed to read SP");
         let lr = uc.reg_read(RegisterARM::LR as i32).expect("failed to read LR");
         let r0 = uc.reg_read(RegisterARM::R0 as i32).expect("failed to read r0");
@@ -93,20 +92,21 @@ pub fn add_debug_prints_ARM<D>(uc: &mut super::UnicornHandle<D>, code_start: u64
 /// detecting common memory corruption bugs. 
 /// The allocator makes heavy use of Unicorn hooks for sanitization/ crash amplification
 /// and thus introduces some overhead.
-pub fn init_emu_with_heap(arch: Arch, 
+pub fn init_emu_with_heap<'a>(arch: Arch, 
         mut size: u32, 
         base_addr: u64, 
         grow: bool
-) -> Result<super::Unicorn<RefCell<Heap>>, uc_error> {
-    let heap = RefCell::new(Heap {real_base: 0 as _, 
-                                    uc_base: 0, 
-                                    len: 0, 
-                                    grow_dynamically: false, 
-                                    chunk_map: HashMap::new(), 
-                                    top: 0, 
-                                    unalloc_hook: 0 as _ });
+) -> Result<super::Unicorn<'a, Heap>, uc_error> {
+    let heap = Heap {real_base: 0 as _, 
+                     uc_base: 0, 
+                     len: 0, 
+                     grow_dynamically: false, 
+                     chunk_map: HashMap::new(), 
+                     top: 0, 
+                     unalloc_hook: 0 as _ };
 
-    let mut unicorn = super::Unicorn::new(arch, Mode::LITTLE_ENDIAN, heap)?;
+    let unicorn = super::Unicorn::new(arch, Mode::LITTLE_ENDIAN, heap)?;
+    {
     let mut uc = unicorn.borrow(); // get handle
 
     // uc memory regions have to be 8 byte aligned
@@ -122,7 +122,8 @@ pub fn init_emu_with_heap(arch: Arch,
         uc.mem_map_ptr(base_addr, size as usize, Permission::READ | Permission::WRITE, arena_ptr)?;
         let h = uc.add_mem_hook(HookType::MEM_VALID, base_addr, base_addr + size as u64, Box::new(heap_unalloc))?;
         let chunks = HashMap::new();
-        let heap: &mut Heap = &mut *uc.get_data().borrow_mut();
+        let data = uc.get_data();
+        let mut heap = data.borrow_mut();
         heap.real_base = arena_ptr; // heap pointer in process mem
         heap.uc_base = base_addr;
         heap.len = size as usize;
@@ -135,6 +136,7 @@ pub fn init_emu_with_heap(arch: Arch,
         heap.top = base_addr; // pointer to top of heap in unicorn mem, increases on allocations
         heap.unalloc_hook = h; // hook ID, needed to rearrange hooks on allocations
     }
+    }
 
     return Ok(unicorn);
 }
@@ -145,7 +147,7 @@ pub fn init_emu_with_heap(arch: Arch,
 /// canary hooks to detect out-of-bounds accesses. 
 /// Grows the heap if necessary and if it is configured to, otherwise
 /// return WRITE_UNMAPPED if there is no space left.
-pub fn uc_alloc(uc: &mut super::UnicornHandle<RefCell<Heap>>, mut size: u64) -> Result<u64, uc_error> {
+pub fn uc_alloc(uc: &mut super::UnicornHandle<Heap>, mut size: u64) -> Result<u64, uc_error> {
     // 8 byte aligned
     if size % 8 != 0 {
         size = ((size / 8) + 1) * 8;
@@ -199,7 +201,7 @@ pub fn uc_alloc(uc: &mut super::UnicornHandle<RefCell<Heap>>, mut size: u64) -> 
 /// Marks the chunk to be freed to detect double-frees later on
 /// and places sanitization hooks over the freed region to detect
 /// use-after-frees.
-pub fn uc_free(uc: &mut super::UnicornHandle<RefCell<Heap>>, ptr: u64) -> Result<(), uc_error> {
+pub fn uc_free(uc: &mut super::UnicornHandle<Heap>, ptr: u64) -> Result<(), uc_error> {
     #[cfg(debug_assertions)]
     println!("[-] Freeing {:#010x}", ptr);
 
@@ -207,7 +209,8 @@ pub fn uc_free(uc: &mut super::UnicornHandle<RefCell<Heap>>, ptr: u64) -> Result
         #[allow(unused_assignments)]
         let mut chunk_size = 0;
         {
-            let mut heap = uc.get_data().borrow_mut();
+            let data = uc.get_data();
+            let mut heap = data.borrow_mut();
             let curr_chunk = heap.chunk_map.get_mut(&ptr).expect("failed to find requested chunk on heap");
             chunk_size = curr_chunk.len as u64;
             curr_chunk.freed = true;
@@ -218,7 +221,7 @@ pub fn uc_free(uc: &mut super::UnicornHandle<RefCell<Heap>>, ptr: u64) -> Result
 } 
 
 
-fn heap_unalloc(uc: super::UnicornHandle<RefCell<Heap>>, _mem_type: MemType, addr: u64, _size: usize, _val: i64) {
+fn heap_unalloc(uc: super::UnicornHandle<Heap>, _mem_type: MemType, addr: u64, _size: usize, _val: i64, _paddr: u64) {
     let arch = uc.get_arch();
     let reg = match arch {
         Arch::X86 => RegisterX86::RIP as i32,
@@ -235,7 +238,7 @@ fn heap_unalloc(uc: super::UnicornHandle<RefCell<Heap>>, _mem_type: MemType, add
 }
 
 
-fn heap_oob(uc: super::UnicornHandle<RefCell<Heap>>, _mem_type: MemType, addr: u64, _size: usize, _val: i64) {
+fn heap_oob(uc: super::UnicornHandle<Heap>, _mem_type: MemType, addr: u64, _size: usize, _val: i64, _paddr: u64) {
     let arch = uc.get_arch();
     let reg = match arch {
         Arch::X86 => RegisterX86::RIP as i32,
@@ -251,7 +254,7 @@ fn heap_oob(uc: super::UnicornHandle<RefCell<Heap>>, _mem_type: MemType, addr: u
 }
 
 
-fn heap_bo (uc: super::UnicornHandle<RefCell<Heap>>, _mem_type: MemType, addr: u64, _size: usize, _val: i64) {       
+fn heap_bo (uc: super::UnicornHandle<Heap>, _mem_type: MemType, addr: u64, _size: usize, _val: i64, _paddr: u64) { 
     let arch = uc.get_arch();
     let reg = match arch {
         Arch::X86 => RegisterX86::RIP as i32,
@@ -267,7 +270,7 @@ fn heap_bo (uc: super::UnicornHandle<RefCell<Heap>>, _mem_type: MemType, addr: u
 }
 
 
-fn heap_uaf (uc: super::UnicornHandle<RefCell<Heap>>, _mem_type: MemType, addr: u64, _size: usize, _val: i64) {       
+fn heap_uaf (uc: super::UnicornHandle<Heap>, _mem_type: MemType, addr: u64, _size: usize, _val: i64, _paddr: u64) {
     let arch = uc.get_arch();
     let reg = match arch {
         Arch::X86 => RegisterX86::RIP as i32,

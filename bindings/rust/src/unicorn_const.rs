@@ -99,6 +99,7 @@ pub enum Query {
 bitflags! {
 #[repr(C)]
 pub struct Permission : u32 {
+        const UNK = 0xFFFFFFFF;
         const NONE = 0;
         const READ = 1;
         const WRITE = 2;
@@ -143,6 +144,7 @@ pub enum Mode {
     ARM926 = 128,
     ARM946 = 256,
     ARM1176 = 512,
+    M4CLASS = 1024,
     // (assoc) MICRO = 16,
     // (assoc) MIPS3 = 32,
     // (assoc) MIPS32R6 = 64,
@@ -160,6 +162,7 @@ pub enum Mode {
 }
 
 impl Mode {
+    pub const ARM: Mode = Mode::LITTLE_ENDIAN;
     pub const MICRO: Mode = Mode::THUMB;
     pub const MIPS3: Mode = Mode::MCLASS;
     pub const MIPS32R6: Mode = Mode::V8;

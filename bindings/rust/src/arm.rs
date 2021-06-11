@@ -124,7 +124,11 @@ pub enum RegisterARM {
     PSP = 116,
     CONTROL = 117,
     XPSR = 118,
-    ENDING = 119,
+    VbarEL0 = 286,
+    VbarEL1 = 287,
+    VbarEL2 = 288,
+    VbarEL3 = 289,
+    ENDING = 290,
 
     // alias registers
     // (assoc) R13 = 12,
