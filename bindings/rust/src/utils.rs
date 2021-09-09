@@ -107,7 +107,7 @@ pub fn init_emu_with_heap<'a>(arch: Arch,
 
     let unicorn = super::Unicorn::new(arch, Mode::LITTLE_ENDIAN, heap)?;
     {
-    let mut uc = unicorn.borrow(); // get handle
+    let mut uc = unicorn.handle(); // get handle
 
     // uc memory regions have to be 8 byte aligned
     if size % 8 != 0 {

@@ -131,7 +131,7 @@ impl<'c, D> Unicorn<'c, D> {
         }
     }
 
-    pub fn borrow(& self) -> UnicornHandle<'c, D> {
+    pub fn handle(& self) -> UnicornHandle<'c, D> {
         UnicornHandle { inner: self.inner.clone() }
     }
 }
