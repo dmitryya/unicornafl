@@ -1957,6 +1957,10 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
     { "AT_S1E0W", 0,7,8, 1,0,3, ARM_CP_STATE_AA64,
       ARM_CP_NO_MIGRATE, PL1_W, NULL, 0, 0,
       NULL, NULL, ats_write },
+    { "PAR_EL1", 0,7,4, 3,0,0, ARM_CP_STATE_AA64,
+      ARM_CP_NO_MIGRATE, PL1_RW, NULL, 0,
+      offsetof(CPUARMState, cp15.par_el1),
+      NULL, NULL, par_write },
 #endif
     /* TLB invalidate last level of translation table walk */
     { "TLBIMVALIS", 15,8,3, 0,0,5, 0,
